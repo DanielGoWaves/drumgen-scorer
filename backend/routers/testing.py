@@ -102,7 +102,7 @@ async def send_prompt(
     with open(audio_file_path, "wb") as f:
         f.write(audio_content)
     
-    audio_url = f"http://localhost:8000/api/audio/{audio_id}"  # Full local URL for frontend
+    audio_url = f"/api/audio/{audio_id}"  # Relative URL - frontend will add base
     difficulty_val = prompt_obj.difficulty if prompt_obj else None
 
     # For free text, we don't create the prompt yet - user will tag it when scoring

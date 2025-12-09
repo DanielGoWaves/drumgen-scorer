@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import api from '../services/api';
+import api, { API_BASE_URL } from '../services/api';
 import AudioPlayer from '../components/AudioPlayer';
 import JsonViewer from '../components/JsonViewer';
 
@@ -404,7 +404,7 @@ export default function ResultsPage() {
             {selectedResult.audio_id && (
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Audio:</div>
-                <AudioPlayer src={`http://localhost:8000/api/audio/${selectedResult.audio_id}`} />
+                <AudioPlayer src={`${API_BASE_URL}/api/audio/${selectedResult.audio_id}`} />
               </div>
             )}
 

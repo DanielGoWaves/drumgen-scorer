@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../services/api';
+import api, { API_BASE_URL } from '../services/api';
 import PromptDisplay from '../components/PromptDisplay';
 import AudioPlayer from '../components/AudioPlayer';
 import ScoringSliders from '../components/ScoringSliders';
@@ -145,7 +145,8 @@ export default function TestingPage() {
       
       const { data } = await api.post('/api/test/send-prompt', payload);
       setLlmJson(data.llm_controls);
-      setAudioUrl(data.audio_url);
+      // Construct full audio URL using API base (for network access)
+      setAudioUrl(data.audio_url ? `${API_BASE_URL}${data.audio_url}` : '');
       
       // For free text, extract drum type from LLM response as suggestion
       if (freeTextMode && data.llm_controls && data.llm_controls.Kind) {
