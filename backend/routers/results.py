@@ -22,6 +22,7 @@ from ..models import (
     TestResultUpdate,
 )
 from ..services.analytics import calculate_generation_score
+from ..services.audio_cleanup import cleanup_orphaned_audio_file
 
 router = APIRouter()
 
@@ -338,6 +339,13 @@ async def delete_result(
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Result not found")
     
+    # Store audio_id before deleting
+    audio_id = result.audio_id
+    
     await session.delete(result)
     await session.commit()
+    
+    # Clean up audio file if it's no longer linked to any result
+    if audio_id:
+        await cleanup_orphaned_audio_file(audio_id, session)
 

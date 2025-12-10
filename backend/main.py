@@ -11,8 +11,9 @@ from fastapi.responses import FileResponse
 
 from sqlalchemy import text
 
-from backend.database import Base, engine
+from backend.database import Base, engine, async_session_maker
 from backend.routers import prompts, results, testing
+from backend.services.audio_cleanup import cleanup_all_orphaned_audio
 
 
 app = FastAPI(title="DrumGen Scorer API")
@@ -47,6 +48,12 @@ async def init_models() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     await init_models()
+    
+    # Clean up orphaned audio files on startup
+    async with async_session_maker() as session:
+        deleted_count = await cleanup_all_orphaned_audio(session)
+        if deleted_count > 0:
+            print(f"🧹 Cleaned up {deleted_count} orphaned audio file(s) on startup")
 
 
 # Routers
