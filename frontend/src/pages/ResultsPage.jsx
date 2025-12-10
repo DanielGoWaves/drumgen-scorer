@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import api, { API_BASE_URL } from '../services/api';
 import AudioPlayer from '../components/AudioPlayer';
@@ -11,6 +11,10 @@ export default function ResultsPage() {
   const [selectedResult, setSelectedResult] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editedScores, setEditedScores] = useState({ audio_quality_score: 5, llm_accuracy_score: 5, notes: '' });
+  const [noteAttachmentFile, setNoteAttachmentFile] = useState(null);
+  const [noteAttachmentPath, setNoteAttachmentPath] = useState('');
+  const [noteDragActive, setNoteDragActive] = useState(false);
+  const noteFileInputRef = useRef(null);
   
   // Filters (initialize from navigation state if provided)
   const [drumTypeFilter, setDrumTypeFilter] = useState(location.state?.drumType || 'all');
@@ -46,6 +50,39 @@ export default function ResultsPage() {
   useEffect(() => {
     loadDrumTypes();
   }, []);
+
+  const handleNoteFileSelect = (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.wav')) {
+      alert('Only .wav files are supported for note attachments.');
+      return;
+    }
+    setNoteAttachmentFile(file);
+    setNoteAttachmentPath('');
+  };
+
+  const handleNoteFileInput = (e) => {
+    const file = e.target.files?.[0];
+    handleNoteFileSelect(file);
+  };
+
+  const uploadNoteAttachment = async () => {
+    if (!noteAttachmentFile) return null;
+    const formData = new FormData();
+    formData.append('file', noteAttachmentFile);
+    const { data } = await api.post('/api/results/upload-note-audio', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return data?.path || null;
+  };
+
+  const clearNoteAttachment = () => {
+    setNoteAttachmentFile(null);
+    setNoteAttachmentPath('');
+    if (noteFileInputRef.current) {
+      noteFileInputRef.current.value = '';
+    }
+  };
 
   const loadDrumTypes = async () => {
     try {
@@ -97,16 +134,28 @@ export default function ResultsPage() {
       llm_accuracy_score: result.llm_accuracy_score,
       notes: result.notes || ''
     });
+    setNoteAttachmentPath(result.notes_audio_path || '');
+    setNoteAttachmentFile(null);
   };
 
   const closeDetail = () => {
     setSelectedResult(null);
     setEditMode(false);
+    clearNoteAttachment();
   };
 
   const saveEdit = async () => {
     try {
-      await api.put(`/api/results/${selectedResult.id}`, editedScores);
+      let notesAudioPathValue = noteAttachmentPath;
+      if (noteAttachmentFile) {
+        const uploadedPath = await uploadNoteAttachment();
+        notesAudioPathValue = uploadedPath;
+      }
+
+      await api.put(`/api/results/${selectedResult.id}`, {
+        ...editedScores,
+        notes_audio_path: notesAudioPathValue ?? null,
+      });
       closeDetail();
       loadResults();
     } catch (err) {
@@ -395,6 +444,7 @@ export default function ResultsPage() {
             ) : (
               getSortedResults().map((result) => {
                 const prompt = prompts[result.prompt_id];
+                const hasNotes = (result.notes && result.notes.trim()) || result.notes_audio_path;
                 return (
                   <tr 
                     key={result.id}
@@ -409,7 +459,7 @@ export default function ResultsPage() {
                   >
                     <td style={{ padding: '12px', position: 'relative' }}>
                       #{result.id}
-                      {result.notes && result.notes.trim() && (
+                      {hasNotes && (
                         <span 
                           style={{
                             display: 'inline-block',
@@ -511,7 +561,7 @@ export default function ResultsPage() {
             >
               <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 Result #{selectedResult.id}
-                {selectedResult.notes && selectedResult.notes.trim() && (
+                {((selectedResult.notes && selectedResult.notes.trim()) || selectedResult.notes_audio_path) && (
                   <span 
                     style={{
                       display: 'inline-block',
@@ -561,6 +611,34 @@ export default function ResultsPage() {
                     Notes:
                   </div>
                   <div style={{ fontSize: '15px', lineHeight: '1.6', color: 'var(--text-primary)' }}>{selectedResult.notes}</div>
+                  {selectedResult.notes_audio_path && (
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>Attached audio:</div>
+                      <AudioPlayer src={`${API_BASE_URL}${selectedResult.notes_audio_path}`} />
+                      <a
+                        href={`${API_BASE_URL}${selectedResult.notes_audio_path}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--secondary-color)' }}
+                      >
+                        Download .wav
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!editMode && !selectedResult.notes && selectedResult.notes_audio_path && (
+                <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--secondary-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Attached audio note:</div>
+                  <AudioPlayer src={`${API_BASE_URL}${selectedResult.notes_audio_path}`} />
+                  <a
+                    href={`${API_BASE_URL}${selectedResult.notes_audio_path}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '12px', color: 'var(--secondary-color)' }}
+                  >
+                    Download .wav
+                  </a>
                 </div>
               )}
 
@@ -592,14 +670,85 @@ export default function ResultsPage() {
                       />
                     </div>
                     <div>
-                      <label className="label">Notes:</label>
-                      <textarea 
-                        value={editedScores.notes}
-                        onChange={(e) => setEditedScores({...editedScores, notes: e.target.value})}
-                        className="input"
-                        rows="4"
-                        placeholder="Add notes..."
-                      />
+                      <label className="label">Notes & Audio Attachment:</label>
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setNoteDragActive(true); }}
+                        onDragLeave={() => setNoteDragActive(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setNoteDragActive(false);
+                          const file = e.dataTransfer.files?.[0];
+                          handleNoteFileSelect(file);
+                        }}
+                        style={{
+                          position: 'relative',
+                          border: noteDragActive ? '1px dashed var(--secondary-color)' : '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          padding: '4px',
+                          background: noteDragActive ? 'rgba(99, 212, 255, 0.04)' : 'transparent'
+                        }}
+                      >
+                        <textarea 
+                          value={editedScores.notes}
+                          onChange={(e) => setEditedScores({...editedScores, notes: e.target.value})}
+                          className="input"
+                          rows="4"
+                          placeholder="Add notes... drag & drop a .wav or tap the .wav icon to attach"
+                          style={{ paddingRight: '90px', minHeight: '90px' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => noteFileInputRef.current?.click()}
+                          className="btn btn-secondary"
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            bottom: '10px',
+                            padding: '6px 10px',
+                            fontSize: '13px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                          title="Attach .wav file from your computer"
+                        >
+                          🎵 .wav
+                        </button>
+                        <input
+                          ref={noteFileInputRef}
+                          type="file"
+                          accept=".wav,audio/wav"
+                          style={{ display: 'none' }}
+                          onChange={handleNoteFileInput}
+                        />
+                      </div>
+                      <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {noteAttachmentFile ? (
+                          <span>Attached: {noteAttachmentFile.name}</span>
+                        ) : noteAttachmentPath ? (
+                          <>
+                            <span>Attachment ready</span>
+                            <a
+                              href={`${API_BASE_URL}${noteAttachmentPath}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: 'var(--secondary-color)' }}
+                            >
+                              View/Download
+                            </a>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                              onClick={clearNoteAttachment}
+                            >
+                              Remove
+                            </button>
+                          </>
+                        ) : (
+                          <span>You can drag & drop a .wav file or use the .wav button to attach.</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (

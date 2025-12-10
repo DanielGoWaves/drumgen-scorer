@@ -40,6 +40,7 @@ class TestResult(Base):
     audio_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     audio_file_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    notes_audio_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     tested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -81,6 +82,7 @@ class TestResultCreate(BaseModel):
     audio_file_path: Optional[str] = None
     model_version: Optional[str] = None
     notes: Optional[str] = None
+    notes_audio_path: Optional[str] = None
     
     # For free text prompts - user provides these
     free_text_prompt: Optional[str] = None
@@ -99,6 +101,7 @@ class TestResultRead(BaseModel):
     audio_id: Optional[str]
     audio_file_path: Optional[str]
     model_version: Optional[str]
+    notes_audio_path: Optional[str]
     tested_at: datetime
     notes: Optional[str]
 
@@ -110,4 +113,5 @@ class TestResultUpdate(BaseModel):
     audio_quality_score: Optional[conint(ge=1, le=10)] = None
     llm_accuracy_score: Optional[conint(ge=1, le=10)] = None
     notes: Optional[str] = None
+    notes_audio_path: Optional[str] = None
 

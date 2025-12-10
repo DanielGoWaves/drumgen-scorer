@@ -38,6 +38,10 @@ export default function TestingPage() {
   const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: null, llm_accuracy_score: null }));
   const [notes, setNotes] = useState(() => getInitialState('notes', ''));
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
+  const [noteAudioFile, setNoteAudioFile] = useState(null);
+  const [noteAudioPath, setNoteAudioPath] = useState('');
+  const [noteDragActive, setNoteDragActive] = useState(false);
+  const noteFileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [freeTextMode, setFreeTextMode] = useState(() => getInitialState('freeTextMode', false));
@@ -138,6 +142,32 @@ export default function TestingPage() {
       }
     }
   }, [currentPrompt, userModifiedVersion, freeTextMode]);
+
+  const handleNoteFileSelect = (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.wav')) {
+      setStatus('Error: Only .wav files are supported for attachments');
+      setTimeout(() => setStatus(''), 2000);
+      return;
+    }
+    setNoteAudioFile(file);
+    setNoteAudioPath('');
+  };
+
+  const handleNoteFileInput = (event) => {
+    const file = event.target.files?.[0];
+    handleNoteFileSelect(file);
+  };
+
+  const uploadNoteAttachment = async () => {
+    if (!noteAudioFile) return null;
+    const formData = new FormData();
+    formData.append('file', noteAudioFile);
+    const { data } = await api.post('/api/results/upload-note-audio', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return data?.path || null;
+  };
 
   const loadNextPrompt = async (isInitialLoad = false) => {
     setStatus('Loading next prompt...');
@@ -277,6 +307,19 @@ export default function TestingPage() {
     setSubmitting(true);
     setStatus('Submitting score...');
     try {
+      let notesAudioPathValue = noteAudioPath || null;
+      if (noteAudioFile) {
+        try {
+          const uploadedPath = await uploadNoteAttachment();
+          notesAudioPathValue = uploadedPath;
+        } catch (err) {
+          setStatus(`Error uploading note audio: ${err?.response?.data?.detail || err.message}`);
+          setSubmitting(false);
+          setLoading(false);
+          return;
+        }
+      }
+
       const audioId = audioUrl?.split('/').pop() || null;
       
       // Extract kind from LLM response
@@ -337,6 +380,7 @@ export default function TestingPage() {
         audio_file_path: audioId ? `audio_files/${audioId}.wav` : null,
         model_version: modelVersion,
         notes: notes.trim() || null,
+        notes_audio_path: notesAudioPathValue,
       };
       
       // Add free text metadata if in free text mode
@@ -373,6 +417,12 @@ export default function TestingPage() {
       
       // Reset promptWasEdited flag after successful submission
       setPromptWasEdited(false);
+      setNoteAudioFile(null);
+      setNoteAudioPath('');
+      setNoteDragActive(false);
+      if (noteFileInputRef.current) {
+        noteFileInputRef.current.value = '';
+      }
       
       // Load next prompt after a brief delay
       if (!freeTextMode) {
@@ -802,22 +852,73 @@ export default function TestingPage() {
                 {notesPanelOpen && (
                   <div className="card" style={{ zIndex: 1, padding: '16px', marginBottom: '16px' }}>
                     <label className="label" style={{ fontSize: '14px', marginBottom: '8px', display: 'block' }}>
-                      Notes (Optional):
+                      Notes (Optional) + Audio Attachment:
                     </label>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Add any notes about this result..."
-                      rows={3}
-                      className="input"
-                      style={{ 
-                        width: '100%', 
-                        fontFamily: 'inherit', 
-                        resize: 'vertical',
-                        minHeight: '80px'
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setNoteDragActive(true); }}
+                      onDragLeave={() => setNoteDragActive(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setNoteDragActive(false);
+                        const file = e.dataTransfer.files?.[0];
+                        handleNoteFileSelect(file);
                       }}
-                      autoFocus
-                    />
+                      style={{
+                        position: 'relative',
+                        border: noteDragActive ? '1px dashed var(--secondary-color)' : '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '4px',
+                        background: noteDragActive ? 'rgba(99, 212, 255, 0.04)' : 'transparent'
+                      }}
+                    >
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Add notes... drag & drop a .wav here or tap the .wav icon to attach"
+                        rows={3}
+                        className="input"
+                        style={{ 
+                          width: '100%', 
+                          fontFamily: 'inherit', 
+                          resize: 'vertical',
+                          minHeight: '80px',
+                          paddingRight: '90px'
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => noteFileInputRef.current?.click()}
+                        className="btn btn-secondary"
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          bottom: '10px',
+                          padding: '6px 10px',
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        title="Attach .wav file from your computer"
+                      >
+                        🎵 .wav
+                      </button>
+                      <input
+                        ref={noteFileInputRef}
+                        type="file"
+                        accept=".wav,audio/wav"
+                        style={{ display: 'none' }}
+                        onChange={handleNoteFileInput}
+                      />
+                    </div>
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      {noteAudioFile
+                        ? `Attached: ${noteAudioFile.name}`
+                        : noteAudioPath
+                        ? 'Audio note attached'
+                        : 'You can drag & drop a .wav file or use the .wav button to attach an audio note.'}
+                    </div>
                   </div>
                 )}
 

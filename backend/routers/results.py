@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 import math
+from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
+from sqlalchemy import func, select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
@@ -21,6 +24,9 @@ from ..models import (
 from ..services.analytics import calculate_generation_score
 
 router = APIRouter()
+
+NOTE_AUDIO_DIR = Path("./note_attachments")
+NOTE_AUDIO_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/score", response_model=TestResultRead, status_code=status.HTTP_201_CREATED, summary="Submit a score")
@@ -58,6 +64,7 @@ async def submit_score(
         audio_file_path=payload.audio_file_path,
         model_version=payload.model_version,
         notes=payload.notes,
+        notes_audio_path=payload.notes_audio_path,
     )
     session.add(result)
     await session.commit()
@@ -210,9 +217,19 @@ async def list_results(
         query = query.where(TestResult.audio_quality_score == audio_quality_score)
     if has_notes is not None:
         if has_notes:
-            query = query.where(TestResult.notes.isnot(None)).where(TestResult.notes != '')
+            query = query.where(
+                or_(
+                    and_(TestResult.notes.isnot(None), TestResult.notes != ""),
+                    TestResult.notes_audio_path.isnot(None),
+                )
+            )
         else:
-            query = query.where((TestResult.notes.is_(None)) | (TestResult.notes == ''))
+            query = query.where(
+                and_(
+                    or_(TestResult.notes.is_(None), TestResult.notes == ""),
+                    TestResult.notes_audio_path.is_(None),
+                )
+            )
     
     query = query.order_by(TestResult.tested_at.desc()).offset(offset).limit(limit)
     
@@ -251,10 +268,40 @@ async def update_result(
         result.llm_accuracy_score = payload.llm_accuracy_score
     if payload.notes is not None:
         result.notes = payload.notes
+    if payload.notes_audio_path is not None:
+        # Empty string clears the attachment
+        result.notes_audio_path = payload.notes_audio_path or None
     
     await session.commit()
     await session.refresh(result)
     return TestResultRead.model_validate(result)
+
+
+@router.post(
+    "/upload-note-audio",
+    summary="Upload audio attachment for notes",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_note_audio(file: UploadFile = File(...)) -> Dict[str, str]:
+    if not file.filename.lower().endswith(".wav"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only .wav files are supported")
+    content = await file.read()
+    filename = f"note-{uuid4()}.wav"
+    out_path = NOTE_AUDIO_DIR / filename
+    out_path.write_bytes(content)
+    return {
+        "path": f"/api/results/note-audio/{filename}",
+        "filename": file.filename,
+        "stored_as": filename,
+    }
+
+
+@router.get("/note-audio/{filename}", summary="Serve note audio attachment")
+async def serve_note_audio(filename: str):
+    target = NOTE_AUDIO_DIR / filename
+    if not target.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    return FileResponse(target, media_type="audio/wav")
 
 
 @router.delete("/{result_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete test result")

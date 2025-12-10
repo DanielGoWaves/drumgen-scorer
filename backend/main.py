@@ -9,6 +9,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from sqlalchemy import text
+
 from backend.database import Base, engine
 from backend.routers import prompts, results, testing
 
@@ -28,6 +30,14 @@ app.add_middleware(
 async def init_models() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Ensure new nullable columns exist when running against an existing DB (SQLite)
+    async with engine.begin() as conn:
+        # Check columns for test_results table
+        result = await conn.execute(text("PRAGMA table_info('test_results')"))
+        columns = [row[1] for row in result.fetchall()]
+        if "notes_audio_path" not in columns:
+            await conn.execute(text("ALTER TABLE test_results ADD COLUMN notes_audio_path TEXT"))
 
 
 @app.on_event("startup")
