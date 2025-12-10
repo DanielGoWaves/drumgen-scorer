@@ -201,6 +201,7 @@ async def update_prompt(
     prompt.text = payload.text
     prompt.difficulty = payload.difficulty
     prompt.category = payload.category
+    prompt.drum_type = payload.drum_type
     prompt.expected_parameters = payload.expected_parameters
     await session.commit()
     await session.refresh(prompt)
