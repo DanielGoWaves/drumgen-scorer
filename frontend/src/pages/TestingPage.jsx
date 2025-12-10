@@ -5,7 +5,6 @@ import AudioPlayer from '../components/AudioPlayer';
 import ScoringSliders from '../components/ScoringSliders';
 import DifficultySlider from '../components/DifficultySlider';
 import JsonViewer from '../components/JsonViewer';
-import { DRUM_KINDS_BY_MODEL, kindToDrumType } from '../data/drumKindsByModel';
 
 export default function TestingPage() {
   // Detect if this is a page refresh (reload) vs navigation
@@ -412,11 +411,6 @@ export default function TestingPage() {
     }
   };
   
-  // Get available drum kinds based on selected model version
-  const getAvailableKinds = () => {
-    return DRUM_KINDS_BY_MODEL[modelVersion] || DRUM_KINDS_BY_MODEL.v12;
-  };
-
   const handleEditPrompt = () => {
     if (!currentPrompt) return;
     setEditedPromptText(currentPrompt.text);

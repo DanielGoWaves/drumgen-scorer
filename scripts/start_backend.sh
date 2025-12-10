@@ -33,6 +33,5 @@ fi
 
 # Start backend server
 echo "🚀 Starting backend server on main branch..."
-cd backend
-uvicorn main:app --reload --port 8000
+uvicorn backend.main:app --reload --port 8000
 
