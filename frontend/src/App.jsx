@@ -12,9 +12,26 @@ const Layout = ({ children }) => {
   return (
     <div className="container">
       <div className="header" style={{ zIndex: 10 }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '700', zIndex: 1 }}>
-          DrumGen Scorer
-        </h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>
+            DrumGen Scorer
+          </h1>
+          {/* DEV_BADGE_START */}
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.9)',
+            color: 'white',
+            padding: '4px 10px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: '700',
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+          }}>
+            DEV
+          </div>
+          {/* DEV_BADGE_END */}
+        </div>
         <nav className="nav" style={{ zIndex: 1 }}>
           <Link 
             to="/test" 
