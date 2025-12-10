@@ -21,7 +21,7 @@ export default function ResultsPage() {
   
   // Sorting
   const [sortColumn, setSortColumn] = useState('tested_at');
-  const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
   
   // Update filters when navigating to results page with state (e.g., clicking from dashboard)
   // Use location.key to detect navigation changes even when pathname stays the same
@@ -135,9 +135,9 @@ export default function ResultsPage() {
       // Toggle direction if same column
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // New column, default to descending
+      // New column, default to ascending (min/A first)
       setSortColumn(column);
-      setSortDirection('desc');
+      setSortDirection('asc');
     }
   };
 
@@ -240,6 +240,7 @@ export default function ResultsPage() {
               <option value="v11">V11</option>
               <option value="v12">V12</option>
               <option value="v13">V13</option>
+              <option value="v14">V14</option>
             </select>
           </div>
           <div>
