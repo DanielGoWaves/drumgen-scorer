@@ -10,11 +10,10 @@ env/
 ENV/
 
 # Database
-# *.db  # Now tracked in git
-# *.db-journal
+# *.db and *.db-journal - Now tracked in git
 
 # Audio files (generated samples)
-# audio_files/  # Now tracked in git
+# audio_files/ - Now tracked in git
 
 # IDE
 .vscode/
