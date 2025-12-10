@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import LoadingOverlay from '../components/LoadingOverlay';
 
 export default function PromptsPage() {
   const [prompts, setPrompts] = useState([]);
@@ -108,6 +109,7 @@ export default function PromptsPage() {
 
   return (
     <div className="grid" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <LoadingOverlay isLoading={loading} />
       <div className="flex items-center justify-between">
         <h2 style={{ fontSize: '24px', fontWeight: '700' }}>
           Prompt Database Manager
@@ -193,11 +195,7 @@ export default function PromptsPage() {
 
       {/* Prompts Table */}
       <div className="card" style={{ zIndex: 1 }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-            Loading prompts...
-          </div>
-        ) : filteredPrompts.length === 0 ? (
+        {filteredPrompts.length === 0 && !loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
             No prompts found. Try adjusting your filters or generate new prompts.
           </div>
