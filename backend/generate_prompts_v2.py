@@ -371,19 +371,38 @@ def verify_prompts(prompts: List[Tuple[str, int, str, str]]):
 
 
 def save_prompts_to_db(prompts: List[Tuple[str, int, str, str]]):
-    """Save prompts to the database."""
+    """Save prompts to the database, skipping duplicates."""
     conn = sqlite3.connect("drumgen.db")
     cursor = conn.cursor()
     
-    # Insert prompts
+    # Get existing prompts (case-insensitive) to check for duplicates
+    cursor.execute("SELECT LOWER(text) FROM prompts WHERE is_user_generated = 0")
+    existing_texts = {row[0] for row in cursor.fetchall()}
+    
+    inserted_count = 0
+    skipped_count = 0
+    
+    # Insert prompts, skipping duplicates
     for text, difficulty, category, drum_type in prompts:
+        text_lower = text.lower()
+        
+        # Skip if duplicate
+        if text_lower in existing_texts:
+            skipped_count += 1
+            continue
+        
         cursor.execute(
             "INSERT INTO prompts (text, difficulty, category, drum_type, is_user_generated, used_count) VALUES (?, ?, ?, ?, 0, 0)",
             (text, difficulty, category, drum_type)
         )
+        existing_texts.add(text_lower)  # Track in current batch
+        inserted_count += 1
     
     conn.commit()
-    print(f"\n✓ Saved {len(prompts)} prompts to database")
+    
+    if skipped_count > 0:
+        print(f"\n⚠️  Skipped {skipped_count} duplicate prompt(s)")
+    print(f"✓ Saved {inserted_count} new prompts to database")
     conn.close()
 
 

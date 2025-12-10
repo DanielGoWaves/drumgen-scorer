@@ -40,10 +40,28 @@ async def list_prompts(
 
 @router.post("/", response_model=PromptRead, status_code=status.HTTP_201_CREATED, summary="Create prompt")
 async def create_prompt(payload: PromptCreate, session: AsyncSession = Depends(get_session)) -> PromptRead:
+    # Check for duplicates if this is NOT a user-generated prompt
+    if not payload.is_user_generated:
+        # Check if a prompt with the same text (case-insensitive) already exists
+        from sqlalchemy import func
+        existing = await session.execute(
+            select(Prompt).where(
+                func.lower(Prompt.text) == func.lower(payload.text),
+                Prompt.is_user_generated == False
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A prompt with this text already exists. Duplicates are not allowed for pre-generated prompts."
+            )
+    
     prompt = Prompt(
         text=payload.text,
         difficulty=payload.difficulty,
         category=payload.category,
+        drum_type=payload.drum_type,
+        is_user_generated=payload.is_user_generated,
         expected_parameters=payload.expected_parameters,
     )
     session.add(prompt)
