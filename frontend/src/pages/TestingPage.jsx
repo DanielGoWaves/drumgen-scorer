@@ -37,6 +37,8 @@ export default function TestingPage() {
   const [audioUrl, setAudioUrl] = useState(() => getInitialState('audioUrl', ''));
   const [status, setStatus] = useState('');
   const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: null, llm_accuracy_score: null }));
+  const [notes, setNotes] = useState(() => getInitialState('notes', ''));
+  const [notesPanelOpen, setNotesPanelOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [freeTextMode, setFreeTextMode] = useState(() => getInitialState('freeTextMode', false));
@@ -96,6 +98,10 @@ export default function TestingPage() {
   useEffect(() => {
     sessionStorage.setItem('testingPage_freeTextMetadata', JSON.stringify(freeTextMetadata));
   }, [freeTextMetadata]);
+
+  useEffect(() => {
+    sessionStorage.setItem('testingPage_notes', JSON.stringify(notes));
+  }, [notes]);
 
   // Track if we've loaded the initial prompt (only once per component lifecycle)
   const hasLoadedInitialPrompt = useRef(false);
@@ -157,6 +163,8 @@ export default function TestingPage() {
       setLlmResponse(null);
       setAudioUrl('');
       setScores({ audio_quality_score: null, llm_accuracy_score: null });
+      setNotes('');
+      setNotesPanelOpen(false);
       setStatus('');
       setUserModifiedVersion(false); // Reset user modification flag on new prompt
     } catch (err) {
@@ -329,6 +337,7 @@ export default function TestingPage() {
         audio_id: audioId,
         audio_file_path: audioId ? `audio_files/${audioId}.wav` : null,
         model_version: modelVersion,
+        notes: notes.trim() || null,
       };
       
       // Add free text metadata if in free text mode
@@ -377,6 +386,8 @@ export default function TestingPage() {
         setLlmResponse(null);
         setAudioUrl('');
         setScores({ audio_quality_score: null, llm_accuracy_score: null });
+        setNotes('');
+        setNotesPanelOpen(false);
         setFreeText('');
         setFreeTextMetadata({ drum_type: '', difficulty: null });
         setSubmitting(false);
@@ -756,8 +767,67 @@ export default function TestingPage() {
                 </div>
               </div>
 
-              {/* Submit Button - Centered Below */}
-              <div style={{ maxWidth: '400px', margin: '0 auto' }}>
+              {/* Notes Panel Toggle & Submit Button */}
+              <div style={{ maxWidth: '400px', margin: '0 auto', marginTop: '20px' }}>
+                {/* Notes Toggle Button */}
+                <button
+                  onClick={() => setNotesPanelOpen(!notesPanelOpen)}
+                  className="btn btn-secondary"
+                  style={{ 
+                    width: '100%', 
+                    justifyContent: 'center', 
+                    marginBottom: notesPanelOpen ? '12px' : '16px',
+                    zIndex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    position: 'relative'
+                  }}
+                >
+                  {notes && notes.trim() ? (
+                    <>
+                      <span 
+                        style={{
+                          display: 'inline-block',
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: '#ef4444'
+                        }}
+                      />
+                      {notesPanelOpen ? '▼ Hide Notes' : '▶ Add/Edit Notes'}
+                    </>
+                  ) : (
+                    <>
+                      {notesPanelOpen ? '▼ Hide Notes' : '▶ Add Notes (Optional)'}
+                    </>
+                  )}
+                </button>
+
+                {/* Collapsible Notes Panel */}
+                {notesPanelOpen && (
+                  <div className="card" style={{ zIndex: 1, padding: '16px', marginBottom: '16px' }}>
+                    <label className="label" style={{ fontSize: '14px', marginBottom: '8px', display: 'block' }}>
+                      Notes (Optional):
+                    </label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add any notes about this result..."
+                      rows={3}
+                      className="input"
+                      style={{ 
+                        width: '100%', 
+                        fontFamily: 'inherit', 
+                        resize: 'vertical',
+                        minHeight: '80px'
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                {/* Submit Button */}
                 <button 
                   onClick={submitScoreAndNext} 
                   disabled={loading || submitting}

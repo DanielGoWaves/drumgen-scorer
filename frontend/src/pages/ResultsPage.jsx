@@ -17,6 +17,7 @@ export default function ResultsPage() {
   const [difficultyFilter, setDifficultyFilter] = useState(location.state?.difficulty ? String(location.state.difficulty) : 'all');
   const [versionFilter, setVersionFilter] = useState(location.state?.modelVersion || 'all');
   const [audioScoreFilter, setAudioScoreFilter] = useState(location.state?.audioScore ? String(location.state.audioScore) : 'all');
+  const [hasNotesFilter, setHasNotesFilter] = useState(false);
   const [availableDrumTypes, setAvailableDrumTypes] = useState([]);
   
   // Sorting
@@ -39,7 +40,7 @@ export default function ResultsPage() {
   // Load results when filters change
   useEffect(() => {
     loadResults();
-  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter]);
+  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
   
   // Load drum types once on mount
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function ResultsPage() {
       if (difficultyFilter !== 'all') params.difficulty = parseInt(difficultyFilter);
       if (versionFilter !== 'all') params.model_version = versionFilter;
       if (audioScoreFilter !== 'all') params.audio_quality_score = parseInt(audioScoreFilter);
+      if (hasNotesFilter) params.has_notes = true;
       
       const { data } = await api.get('/api/results/', { params });
       setResults(data);
@@ -128,7 +130,7 @@ export default function ResultsPage() {
 
   useEffect(() => {
     loadResults();
-  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter]);
+  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
 
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -252,6 +254,27 @@ export default function ResultsPage() {
               ))}
             </select>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '24px' }}>
+            <input
+              type="checkbox"
+              id="hasNotesFilter"
+              checked={hasNotesFilter}
+              onChange={(e) => setHasNotesFilter(e.target.checked)}
+              style={{ 
+                width: '18px', 
+                height: '18px', 
+                cursor: 'pointer',
+                accentColor: 'var(--primary-color)'
+              }}
+            />
+            <label 
+              htmlFor="hasNotesFilter" 
+              className="label" 
+              style={{ margin: 0, cursor: 'pointer', userSelect: 'none' }}
+            >
+              Show only results with notes
+            </label>
+          </div>
         </div>
       </div>
 
@@ -332,7 +355,23 @@ export default function ResultsPage() {
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--secondary-bg)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '12px' }}>#{result.id}</td>
+                    <td style={{ padding: '12px', position: 'relative' }}>
+                      #{result.id}
+                      {result.notes && result.notes.trim() && (
+                        <span 
+                          style={{
+                            display: 'inline-block',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: '#ef4444',
+                            marginLeft: '8px',
+                            verticalAlign: 'middle'
+                          }}
+                          title="This result has notes"
+                        />
+                      )}
+                    </td>
                     <td style={{ padding: '12px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {prompt?.text || 'Loading...'}
                     </td>
@@ -418,8 +457,21 @@ export default function ResultsPage() {
               }}
               className="custom-scrollbar"
             >
-              <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 Result #{selectedResult.id}
+                {selectedResult.notes && selectedResult.notes.trim() && (
+                  <span 
+                    style={{
+                      display: 'inline-block',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ef4444',
+                      verticalAlign: 'middle'
+                    }}
+                    title="This result has notes"
+                  />
+                )}
               </h3>
 
               {/* Prompt Info */}
@@ -438,6 +490,25 @@ export default function ResultsPage() {
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Audio:</div>
                   <AudioPlayer src={`${API_BASE_URL}/api/audio/${selectedResult.audio_id}`} />
+                </div>
+              )}
+
+              {/* Notes Section - Prominently displayed */}
+              {selectedResult.notes && selectedResult.notes.trim() && !editMode && (
+                <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span 
+                      style={{
+                        display: 'inline-block',
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: '#ef4444'
+                      }}
+                    />
+                    Notes:
+                  </div>
+                  <div style={{ fontSize: '15px', lineHeight: '1.6', color: 'var(--text-primary)' }}>{selectedResult.notes}</div>
                 </div>
               )}
 
@@ -474,7 +545,7 @@ export default function ResultsPage() {
                         value={editedScores.notes}
                         onChange={(e) => setEditedScores({...editedScores, notes: e.target.value})}
                         className="input"
-                        rows="3"
+                        rows="4"
                         placeholder="Add notes..."
                       />
                     </div>
@@ -493,12 +564,6 @@ export default function ResultsPage() {
                         {selectedResult.llm_accuracy_score}/10
                       </div>
                     </div>
-                  </div>
-                )}
-                {selectedResult.notes && !editMode && (
-                  <div style={{ marginTop: '12px', padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Notes:</div>
-                    <div style={{ fontSize: '14px' }}>{selectedResult.notes}</div>
                   </div>
                 )}
               </div>

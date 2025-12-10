@@ -189,6 +189,7 @@ async def list_results(
     difficulty: Optional[int] = None,
     model_version: Optional[str] = None,
     audio_quality_score: Optional[int] = None,
+    has_notes: Optional[bool] = None,
     limit: int = 1000,
     offset: int = 0,
     session: AsyncSession = Depends(get_session),
@@ -207,6 +208,11 @@ async def list_results(
         query = query.where(TestResult.model_version == model_version)
     if audio_quality_score is not None:
         query = query.where(TestResult.audio_quality_score == audio_quality_score)
+    if has_notes is not None:
+        if has_notes:
+            query = query.where(TestResult.notes.isnot(None)).where(TestResult.notes != '')
+        else:
+            query = query.where((TestResult.notes.is_(None)) | (TestResult.notes == ''))
     
     query = query.order_by(TestResult.tested_at.desc()).offset(offset).limit(limit)
     
