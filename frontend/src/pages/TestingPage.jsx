@@ -32,6 +32,7 @@ export default function TestingPage() {
 
   const [currentPrompt, setCurrentPrompt] = useState(() => getInitialState('currentPrompt', null));
   const [llmJson, setLlmJson] = useState(() => getInitialState('llmJson', null));
+  const [llmResponse, setLlmResponse] = useState(() => getInitialState('llmResponse', null));
   const [audioUrl, setAudioUrl] = useState(() => getInitialState('audioUrl', ''));
   const [status, setStatus] = useState('');
   const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: null, llm_accuracy_score: null }));
@@ -61,6 +62,10 @@ export default function TestingPage() {
   useEffect(() => {
     sessionStorage.setItem('testingPage_llmJson', JSON.stringify(llmJson));
   }, [llmJson]);
+  
+  useEffect(() => {
+    sessionStorage.setItem('testingPage_llmResponse', JSON.stringify(llmResponse));
+  }, [llmResponse]);
   
   useEffect(() => {
     sessionStorage.setItem('testingPage_audioUrl', JSON.stringify(audioUrl));
@@ -131,6 +136,7 @@ export default function TestingPage() {
       const { data } = await api.get('/api/prompts/next-in-rotation', { params });
       setCurrentPrompt(data);
       setLlmJson(null);
+      setLlmResponse(null);
       setAudioUrl('');
       setScores({ audio_quality_score: null, llm_accuracy_score: null });
       setStatus('');
@@ -193,6 +199,7 @@ export default function TestingPage() {
       
       const { data } = await api.post('/api/test/send-prompt', payload);
       setLlmJson(data.llm_controls);
+      setLlmResponse(data.llm_response || null);
       // Construct full audio URL using API base (for network access)
       setAudioUrl(data.audio_url ? `${API_BASE_URL}${data.audio_url}` : '');
       
@@ -261,6 +268,7 @@ export default function TestingPage() {
       const payload = {
         ...scores,
         generated_json: llmJson,
+        llm_response: llmResponse,
         audio_id: audioId,
         audio_file_path: audioId ? `audio_files/${audioId}.wav` : null,
         model_version: modelVersion,
@@ -292,6 +300,7 @@ export default function TestingPage() {
         }, 1000);
       } else {
         setLlmJson(null);
+        setLlmResponse(null);
         setAudioUrl('');
         setScores({ audio_quality_score: null, llm_accuracy_score: null });
         setFreeText('');
@@ -307,6 +316,7 @@ export default function TestingPage() {
   const toggleMode = () => {
     setFreeTextMode(!freeTextMode);
     setLlmJson(null);
+    setLlmResponse(null);
     setAudioUrl('');
     setStatus('');
   };

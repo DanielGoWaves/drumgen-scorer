@@ -36,6 +36,7 @@ class TestResult(Base):
     audio_quality_score: Mapped[int] = mapped_column(Integer, nullable=False)
     llm_accuracy_score: Mapped[int] = mapped_column(Integer, nullable=False)
     generated_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    llm_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     audio_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     audio_file_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -75,6 +76,7 @@ class TestResultCreate(BaseModel):
     audio_quality_score: conint(ge=1, le=10)
     llm_accuracy_score: conint(ge=1, le=10)
     generated_json: Optional[dict[str, Any]] = None
+    llm_response: Optional[str] = None
     audio_id: Optional[str] = None
     audio_file_path: Optional[str] = None
     model_version: Optional[str] = None
@@ -93,6 +95,7 @@ class TestResultRead(BaseModel):
     audio_quality_score: int
     llm_accuracy_score: int
     generated_json: Optional[dict[str, Any]]
+    llm_response: Optional[str]
     audio_id: Optional[str]
     audio_file_path: Optional[str]
     model_version: Optional[str]

@@ -520,3 +520,14 @@ th[style*="cursor: pointer"]:hover {
     color: var(--text-secondary);
 }
 
+/* Hidden Scrollbar - Scroll functionality maintained */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+}
+
+.custom-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+

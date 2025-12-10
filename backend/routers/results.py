@@ -53,6 +53,7 @@ async def submit_score(
         audio_quality_score=payload.audio_quality_score,
         llm_accuracy_score=payload.llm_accuracy_score,
         generated_json=payload.generated_json,
+        llm_response=payload.llm_response,
         audio_id=payload.audio_id,
         audio_file_path=payload.audio_file_path,
         model_version=payload.model_version,
