@@ -80,8 +80,8 @@ def add_badge(content):
     # Handle both with and without zIndex in h1
     pattern = r'(<h1 style={{ fontSize: \'24px\', fontWeight: \'700\'(?:, zIndex: 1)? }}>\s*\n\s*DrumGen Scorer\s*\n\s*</h1>)'
     
-    replacement = f"""<div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>
+    replacement = f"""        <div style={{{{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}}}>
+          <h1 style={{{{ fontSize: '24px', fontWeight: '700', margin: 0 }}}}>
             DrumGen Scorer
           </h1>
 {DEV_BADGE_CODE}
