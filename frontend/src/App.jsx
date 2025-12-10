@@ -12,7 +12,7 @@ const Layout = ({ children }) => {
   return (
     <div className="container">
       <div className="header" style={{ zIndex: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>
             DrumGen Scorer
           </h1>
