@@ -38,10 +38,11 @@ def remove_badge(content):
     # Match: <div style={{...flex...}}>\n<h1 style={{...margin: 0...}}>\nDrumGen Scorer\n</h1>\n</div>
     # Replace with: <h1 style={{...zIndex: 1...}}>\n          DrumGen Scorer\n        </h1>
     
-    # Pattern that matches the entire wrapper structure
+    # Pattern that matches the entire wrapper structure (handle both style={{ and style={)
+    # First try to match correct syntax with style={{}}
     pattern = (
-        r'<div style={{ display: \'flex\', alignItems: \'center\', gap: \'12px\', zIndex: 1 }}>\s*\n'
-        r'\s*<h1 style={{ fontSize: \'24px\', fontWeight: \'700\', margin: 0 }}>\s*\n'
+        r'<div style=\{\{ display: \'flex\', alignItems: \'center\', gap: \'12px\', zIndex: 1 \}\}>\s*\n'
+        r'\s*<h1 style=\{\{ fontSize: \'24px\', fontWeight: \'700\', margin: 0 \}\}>\s*\n'
         r'\s*DrumGen Scorer\s*\n'
         r'\s*</h1>\s*\n'
         r'\s*</div>'
@@ -52,19 +53,30 @@ def remove_badge(content):
     if re.search(pattern, content, flags=re.MULTILINE | re.DOTALL):
         content = re.sub(pattern, replacement, content, flags=re.MULTILINE | re.DOTALL)
     else:
-        # Fallback: simpler pattern that matches across any whitespace
-        pattern2 = (
-            r'<div style={{[^}]*display: \'flex\'[^}]*}}>'
-            r'.*?'
-            r'<h1 style={{[^}]*margin: 0[^}]*}}>'
-            r'.*?'
-            r'DrumGen Scorer'
-            r'.*?'
-            r'</h1>'
-            r'.*?'
-            r'</div>'
+        # Fallback: handle corrupted syntax with style={ (missing one brace)
+        pattern_corrupted = (
+            r'<div style=\{ display: \'flex\', alignItems: \'center\', gap: \'12px\', zIndex: 1 \}>\s*\n'
+            r'\s*<h1 style=\{ fontSize: \'24px\', fontWeight: \'700\', margin: 0 \}>\s*\n'
+            r'\s*DrumGen Scorer\s*\n'
+            r'\s*</h1>\s*\n'
+            r'\s*</div>'
         )
-        content = re.sub(pattern2, replacement, content, flags=re.DOTALL)
+        if re.search(pattern_corrupted, content, flags=re.MULTILINE | re.DOTALL):
+            content = re.sub(pattern_corrupted, replacement, content, flags=re.MULTILINE | re.DOTALL)
+        else:
+            # Last fallback: simpler pattern that matches across any whitespace
+            pattern2 = (
+                r'<div style=\{\{?[^}]*display: \'flex\'[^}]*\}?\}>'
+                r'.*?'
+                r'<h1 style=\{\{?[^}]*margin: 0[^}]*\}?\}>'
+                r'.*?'
+                r'DrumGen Scorer'
+                r'.*?'
+                r'</h1>'
+                r'.*?'
+                r'</div>'
+            )
+            content = re.sub(pattern2, replacement, content, flags=re.DOTALL)
     
     # Clean up any extra whitespace
     content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
@@ -80,8 +92,8 @@ def add_badge(content):
     # Handle both with and without zIndex in h1
     pattern = r'(<h1 style={{ fontSize: \'24px\', fontWeight: \'700\'(?:, zIndex: 1)? }}>\s*\n\s*DrumGen Scorer\s*\n\s*</h1>)'
     
-    replacement = f"""<div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>
+    replacement = f"""        <div style={{{{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}}}>
+          <h1 style={{{{ fontSize: '24px', fontWeight: '700', margin: 0 }}}}>
             DrumGen Scorer
           </h1>
 {DEV_BADGE_CODE}
