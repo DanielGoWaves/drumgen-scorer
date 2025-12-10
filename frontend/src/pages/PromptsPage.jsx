@@ -8,7 +8,10 @@ export default function PromptsPage() {
   const [difficultyFilter, setDifficultyFilter] = useState('');
   const [drumTypeFilter, setDrumTypeFilter] = useState('');
   const [promptSource, setPromptSource] = useState('all'); // 'all', 'pre-generated', 'user-generated'
-  const [sortBy, setSortBy] = useState('used_count');
+  
+  // Sorting
+  const [sortColumn, setSortColumn] = useState('used_count');
+  const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc' - default 'desc' for 'used_count'
 
   useEffect(() => {
     loadPrompts();
@@ -37,9 +40,19 @@ export default function PromptsPage() {
     }
   };
 
-  // Filter and sort prompts
-  const filteredPrompts = prompts
-    .filter(p => {
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to ascending (min/A first), except 'used_count' which defaults to descending (most to fewest)
+      setSortColumn(column);
+      setSortDirection(column === 'used_count' ? 'desc' : 'asc');
+    }
+  };
+
+  const getSortedPrompts = () => {
+    const filtered = prompts.filter(p => {
       const matchesSearch = !searchTerm || p.text.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDifficulty = !difficultyFilter || p.difficulty === Number(difficultyFilter);
       const matchesDrumType = !drumTypeFilter || p.drum_type === drumTypeFilter;
@@ -47,13 +60,47 @@ export default function PromptsPage() {
                            (promptSource === 'pre-generated' && !p.is_user_generated) ||
                            (promptSource === 'user-generated' && p.is_user_generated);
       return matchesSearch && matchesDifficulty && matchesDrumType && matchesSource;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'used_count') return (b.used_count || 0) - (a.used_count || 0);
-      if (sortBy === 'difficulty') return a.difficulty - b.difficulty;
-      if (sortBy === 'drum_type') return (a.drum_type || '').localeCompare(b.drum_type || '');
-      return 0;
     });
+
+    const sorted = [...filtered].sort((a, b) => {
+      let aVal, bVal;
+
+      switch (sortColumn) {
+        case 'text':
+          aVal = a.text || '';
+          bVal = b.text || '';
+          break;
+        case 'difficulty':
+          aVal = a.difficulty || 0;
+          bVal = b.difficulty || 0;
+          break;
+        case 'drum_type':
+          aVal = a.drum_type || '';
+          bVal = b.drum_type || '';
+          break;
+        case 'used_count':
+          aVal = a.used_count || 0;
+          bVal = b.used_count || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aVal === 'string') {
+        return sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      } else {
+        return sortDirection === 'asc' 
+          ? aVal - bVal
+          : bVal - aVal;
+      }
+    });
+
+    return sorted;
+  };
+
+  const filteredPrompts = getSortedPrompts();
 
   const drumTypes = [...new Set(prompts.map(p => p.drum_type).filter(Boolean))].sort();
   const userGeneratedCount = prompts.filter(p => p.is_user_generated).length;
@@ -137,20 +184,6 @@ export default function PromptsPage() {
             </select>
           </div>
 
-          {/* Sort By */}
-          <div style={{ zIndex: 1 }}>
-            <label className="label">Sort By</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="input"
-              style={{ cursor: 'pointer' }}
-            >
-              <option value="used_count">Times Used</option>
-              <option value="difficulty">Difficulty</option>
-              <option value="drum_type">Drum Type</option>
-            </select>
-          </div>
         </div>
 
         <div className="text-secondary" style={{ marginTop: '12px', fontSize: '14px' }}>
@@ -178,17 +211,29 @@ export default function PromptsPage() {
             }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                    Prompt Text
+                  <th 
+                    onClick={() => handleSort('text')} 
+                    style={{ padding: '12px', textAlign: 'left', fontWeight: '600', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    Prompt Text {sortColumn === 'text' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                    Difficulty
+                  <th 
+                    onClick={() => handleSort('difficulty')} 
+                    style={{ padding: '12px', textAlign: 'center', fontWeight: '600', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    Difficulty {sortColumn === 'difficulty' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                    Drum Type
+                  <th 
+                    onClick={() => handleSort('drum_type')} 
+                    style={{ padding: '12px', textAlign: 'center', fontWeight: '600', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    Drum Type {sortColumn === 'drum_type' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                    Times Used
+                  <th 
+                    onClick={() => handleSort('used_count')} 
+                    style={{ padding: '12px', textAlign: 'center', fontWeight: '600', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    Times Used {sortColumn === 'used_count' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: '600' }}>
                     Actions
