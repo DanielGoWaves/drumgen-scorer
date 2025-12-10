@@ -12,7 +12,7 @@ const Layout = ({ children }) => {
   return (
     <div className="container">
       <div className="header" style={{ zIndex: 10 }}>
-                        <h1 style={{ fontSize: '24px', fontWeight: '700', zIndex: 1 }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '700', zIndex: 1 }}>
           DrumGen Scorer
         </h1>
         <nav className="nav" style={{ zIndex: 1 }}>
