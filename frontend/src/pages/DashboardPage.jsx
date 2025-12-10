@@ -101,6 +101,23 @@ export default function DashboardPage() {
     return colors[score - 1] || colors[4]; // default to yellow
   };
 
+  // Convert 0-100 score to 1-10 scale (rounding up) for color mapping
+  const scoreToColorScale = (score100) => {
+    if (score100 <= 0) return 1;
+    if (score100 >= 100) return 10;
+    // Divide by 10 and round up: 43/10 = 4.3 -> 5, 57/10 = 5.7 -> 6
+    return Math.ceil(score100 / 10);
+  };
+
+  // Get color for a 0-100 score
+  const getScore100Color = (score100) => {
+    const scaleScore = scoreToColorScale(score100);
+    return getScoreColor(scaleScore);
+  };
+
+  // Green color for score 10 (used for "/100")
+  const score10Green = '#16a34a';
+
 
   return (
     <div className="grid" style={{ maxWidth: '1400px', margin: '0 auto' }}>
@@ -220,8 +237,9 @@ export default function DashboardPage() {
                 <div className="text-secondary" style={{ fontSize: '13px', marginBottom: '6px' }}>
                   Generation Score
                 </div>
-                <div style={{ fontSize: '36px', fontWeight: '800', color: 'var(--primary-color)' }}>
-                  {displayScore}/100
+                <div style={{ fontSize: '36px', fontWeight: '800' }}>
+                  <span style={{ color: getScore100Color(displayScore) }}>{displayScore}</span>
+                  <span style={{ color: score10Green }}>/100</span>
                 </div>
               </div>
             </div>
@@ -234,8 +252,11 @@ export default function DashboardPage() {
                 <div className="text-secondary" style={{ fontSize: '12px', marginBottom: '2px' }}>
                   LLM Accuracy
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: 'var(--secondary-color)' }}>
-                  {analytics?.avg_llm_accuracy || 0}
+                <div style={{ fontSize: '22px', fontWeight: '700' }}>
+                  <span style={{ color: getScore100Color((analytics?.avg_llm_accuracy || 0) * 10) }}>
+                    {analytics?.avg_llm_accuracy || 0}
+                  </span>
+                  <span style={{ color: score10Green, fontSize: '18px' }}>/10</span>
                 </div>
               </div>
             </div>
@@ -479,21 +500,29 @@ export default function DashboardPage() {
                 }}>
                   {version.version}
                 </div>
-                <div style={{ fontSize: '36px', fontWeight: '700', marginBottom: '8px', color: 'var(--primary-color)' }}>
-                  {version.generation_score}
-                </div>
-                <div className="text-secondary" style={{ fontSize: '11px', marginBottom: '12px' }}>
-                  / 100 (Generation)
-                </div>
-                <div style={{ 
-                  fontSize: '12px',
-                  borderTop: '1px solid var(--border-color)',
-                  paddingTop: '12px',
-                  textAlign: 'center'
-                }}>
-                  <div className="text-secondary">LLM Accuracy</div>
-                  <div style={{ fontWeight: '600', color: 'var(--secondary-color)', fontSize: '16px', marginTop: '4px' }}>{version.avg_llm}</div>
-                </div>
+        <div style={{ fontSize: '36px', fontWeight: '700', marginBottom: '8px' }}>
+          <span style={{ color: getScore100Color(version.generation_score) }}>
+            {version.generation_score}
+          </span>
+          <span style={{ color: score10Green, fontSize: '24px' }}>/100</span>
+        </div>
+        <div className="text-secondary" style={{ fontSize: '11px', marginBottom: '12px' }}>
+          (Generation)
+        </div>
+        <div style={{ 
+          fontSize: '12px',
+          borderTop: '1px solid var(--border-color)',
+          paddingTop: '12px',
+          textAlign: 'center'
+        }}>
+          <div className="text-secondary">LLM Accuracy</div>
+          <div style={{ fontWeight: '600', fontSize: '16px', marginTop: '4px' }}>
+            <span style={{ color: getScore100Color(version.avg_llm * 10) }}>
+              {version.avg_llm}
+            </span>
+            <span style={{ color: score10Green, fontSize: '14px' }}>/10</span>
+          </div>
+        </div>
                 <div className="text-secondary" style={{ fontSize: '11px', marginTop: '12px' }}>
                   {version.count} test{version.count !== 1 ? 's' : ''}
                 </div>

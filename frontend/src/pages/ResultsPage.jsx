@@ -94,6 +94,23 @@ export default function ResultsPage() {
     }
   };
 
+  // Calculate color for scores (1=red, 10=green) - same as DashboardPage
+  const getScoreColor = (score) => {
+    const colors = [
+      '#ef4444', // 1 - red
+      '#f97316', // 2 - orange-red
+      '#fb923c', // 3 - orange
+      '#fbbf24', // 4 - yellow-orange
+      '#facc15', // 5 - yellow
+      '#bef264', // 6 - yellow-green
+      '#86efac', // 7 - light green
+      '#4ade80', // 8 - green
+      '#22c55e', // 9 - bright green
+      '#16a34a', // 10 - dark green
+    ];
+    return colors[score - 1] || colors[4]; // default to yellow
+  };
+
   const loadResults = async () => {
     setLoading(true);
     try {
@@ -459,6 +476,7 @@ export default function ResultsPage() {
               getSortedResults().map((result) => {
                 const prompt = prompts[result.prompt_id];
                 const hasNotes = (result.notes && result.notes.trim()) || result.notes_audio_path;
+                const hasIllugen = result.illugen_attachments && result.illugen_attachments.items && result.illugen_attachments.items.length > 0;
                 return (
                   <tr 
                     key={result.id}
@@ -473,20 +491,35 @@ export default function ResultsPage() {
                   >
                     <td style={{ padding: '12px', position: 'relative' }}>
                       #{result.id}
-                      {hasNotes && (
-                        <span 
-                          style={{
-                            display: 'inline-block',
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: '#ef4444',
-                            marginLeft: '8px',
-                            verticalAlign: 'middle'
-                          }}
-                          title="This result has notes"
-                        />
-                      )}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: '8px', verticalAlign: 'middle' }}>
+                        {hasNotes && (
+                          <span 
+                            style={{
+                              display: 'inline-block',
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ef4444',
+                            }}
+                            title="This result has notes"
+                          />
+                        )}
+                        {hasIllugen && (
+                          <span 
+                            style={{
+                              display: 'inline-block',
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                              backgroundSize: '300% 300%',
+                              animation: 'shimmer 3s ease-in-out infinite',
+                              boxShadow: '0 2px 8px rgba(130,71,255,0.4)',
+                            }}
+                            title="This result has Illugen attachments"
+                          />
+                        )}
+                      </span>
                     </td>
                     <td style={{ padding: '12px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {prompt?.text || 'Loading...'}
@@ -494,10 +527,10 @@ export default function ResultsPage() {
                     <td style={{ padding: '12px' }}>{prompt?.drum_type || '-'}</td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>{prompt?.difficulty || '-'}</td>
                     <td style={{ padding: '12px', textAlign: 'center', textTransform: 'uppercase' }}>{result.model_version || '-'}</td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: 'var(--success-color)' }}>
+                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: getScoreColor(result.audio_quality_score) }}>
                       {result.audio_quality_score}
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: 'var(--secondary-color)' }}>
+                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: getScoreColor(result.llm_accuracy_score) }}>
                       {result.llm_accuracy_score}
                     </td>
                     <td style={{ padding: '12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -575,19 +608,37 @@ export default function ResultsPage() {
             >
               <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 Result #{selectedResult.id}
-                {((selectedResult.notes && selectedResult.notes.trim()) || selectedResult.notes_audio_path || (selectedResult.illugen_attachments && selectedResult.illugen_attachments.items && selectedResult.illugen_attachments.items.length)) && (
-                  <span 
-                    style={{
-                      display: 'inline-block',
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: '#ef4444',
-                      verticalAlign: 'middle'
-                    }}
-                    title="This result has notes"
-                  />
-                )}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  {((selectedResult.notes && selectedResult.notes.trim()) || selectedResult.notes_audio_path) && (
+                    <span 
+                      style={{
+                        display: 'inline-block',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: '#ef4444',
+                        verticalAlign: 'middle'
+                      }}
+                      title="This result has notes"
+                    />
+                  )}
+                  {(selectedResult.illugen_attachments && selectedResult.illugen_attachments.items && selectedResult.illugen_attachments.items.length) && (
+                    <span 
+                      style={{
+                        display: 'inline-block',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                        backgroundSize: '300% 300%',
+                        animation: 'shimmer 3s ease-in-out infinite',
+                        boxShadow: '0 2px 8px rgba(130,71,255,0.4)',
+                        verticalAlign: 'middle'
+                      }}
+                      title="This result has Illugen attachments"
+                    />
+                  )}
+                </span>
               </h3>
 
               {/* Prompt Info */}
@@ -806,13 +857,13 @@ export default function ResultsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     <div style={{ padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Generation Score</div>
-                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--success-color)' }}>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: getScoreColor(selectedResult.audio_quality_score) }}>
                         {selectedResult.audio_quality_score}/10
                       </div>
                     </div>
                     <div style={{ padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>LLM Score</div>
-                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--secondary-color)' }}>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: getScoreColor(selectedResult.llm_accuracy_score) }}>
                         {selectedResult.llm_accuracy_score}/10
                       </div>
                     </div>

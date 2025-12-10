@@ -219,21 +219,37 @@ async def list_results(
         query = query.where(TestResult.audio_quality_score == audio_quality_score)
     if has_notes is not None:
         if has_notes:
-            query = query.where(
-                or_(
-                    and_(TestResult.notes.isnot(None), TestResult.notes != ""),
-                    TestResult.notes_audio_path.isnot(None),
-                    TestResult.illugen_attachments.isnot(None),
-                )
+            # Check for notes text (not None and not empty string)
+            has_notes_text = and_(TestResult.notes.isnot(None), TestResult.notes != "")
+            # Check for notes audio path
+            has_notes_audio = TestResult.notes_audio_path.isnot(None)
+            # Check for illugen attachments (not None, not JSON "null", not empty object, and has items array with length > 0)
+            # Handle both SQL NULL and JSON string "null" cases
+            has_illugen = and_(
+                TestResult.illugen_attachments.isnot(None),
+                TestResult.illugen_attachments != 'null',  # Exclude JSON string "null"
+                TestResult.illugen_attachments != '{}',  # Exclude empty JSON object
+                func.json_extract(TestResult.illugen_attachments, '$.items').isnot(None),
+                func.json_array_length(
+                    func.json_extract(TestResult.illugen_attachments, '$.items')
+                ) > 0
             )
+            query = query.where(or_(has_notes_text, has_notes_audio, has_illugen))
         else:
-            query = query.where(
-                and_(
-                    or_(TestResult.notes.is_(None), TestResult.notes == ""),
-                    TestResult.notes_audio_path.is_(None),
-                    TestResult.illugen_attachments.is_(None),
-                )
+            # No notes text, no notes audio, and no illugen attachments (or empty)
+            no_notes_text = or_(TestResult.notes.is_(None), TestResult.notes == "")
+            no_notes_audio = TestResult.notes_audio_path.is_(None)
+            # No illugen attachments OR it's SQL NULL OR JSON string "null" OR empty object OR items array doesn't exist/is empty
+            no_illugen = or_(
+                TestResult.illugen_attachments.is_(None),
+                TestResult.illugen_attachments == 'null',  # Include JSON string "null"
+                TestResult.illugen_attachments == '{}',  # Include empty JSON object
+                func.json_extract(TestResult.illugen_attachments, '$.items').is_(None),
+                func.json_array_length(
+                    func.json_extract(TestResult.illugen_attachments, '$.items')
+                ) == 0
             )
+            query = query.where(and_(no_notes_text, no_notes_audio, no_illugen))
     
     query = query.order_by(TestResult.tested_at.desc()).offset(offset).limit(limit)
     
