@@ -50,7 +50,16 @@ async def generate_and_save_prompts():
     async with async_session_maker() as session:
         print("Generating 2000 new prompts...")
         
+        # Get existing prompts to check for duplicates (case-insensitive)
+        from sqlalchemy import func
+        existing_result = await session.execute(
+            select(func.lower(Prompt.text)).where(Prompt.is_user_generated == False)
+        )
+        existing_texts = {text.lower() for text in existing_result.scalars().all()}
+        print(f"Found {len(existing_texts)} existing prompts to check against")
+        
         prompts_to_add = []
+        duplicates_skipped = 0
         
         # Generate ~222 prompts for each of the 9 new types
         for drum in NEW_DRUM_TYPES:
@@ -61,8 +70,20 @@ async def generate_and_save_prompts():
                 count = 22
                 if drum == "impact": count = 23 # slight adjust to reach 2000
                 
-                for _ in range(count):
+                generated_count = 0
+                attempts = 0
+                max_attempts = count * 10  # Allow up to 10x attempts to find unique prompts
+                
+                while generated_count < count and attempts < max_attempts:
                     text = generate_prompt_for_drum(drum, difficulty)
+                    text_lower = text.lower()
+                    
+                    # Skip if duplicate
+                    if text_lower in existing_texts:
+                        duplicates_skipped += 1
+                        attempts += 1
+                        continue
+                    
                     category = random.choice(["technical", "emotional", "artistic"])
                     
                     prompt = Prompt(
@@ -74,6 +95,12 @@ async def generate_and_save_prompts():
                         used_count=0
                     )
                     prompts_to_add.append(prompt)
+                    existing_texts.add(text_lower)  # Track in current batch too
+                    generated_count += 1
+                    attempts += 1
+        
+        if duplicates_skipped > 0:
+            print(f"\n⚠️  Skipped {duplicates_skipped} duplicate prompt(s)")
         
         # Shuffle
         random.shuffle(prompts_to_add)
@@ -87,7 +114,7 @@ async def generate_and_save_prompts():
             batch = prompts_to_add[i:i+batch_size]
             session.add_all(batch)
             await session.commit()
-            print(f"Saved batch {i//batch_size + 1}/20")
+            print(f"Saved batch {i//batch_size + 1}/{(len(prompts_to_add) + batch_size - 1)//batch_size}")
             
         print(f"✓ Successfully added {len(prompts_to_add)} new prompts for types: {', '.join(NEW_DRUM_TYPES)}")
 
