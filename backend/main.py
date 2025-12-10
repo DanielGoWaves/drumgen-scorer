@@ -9,8 +9,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .database import Base, engine
-from .routers import prompts, results, testing
+from backend.database import Base, engine
+from backend.routers import prompts, results, testing
 
 
 app = FastAPI(title="DrumGen Scorer API")
@@ -52,6 +52,12 @@ async def serve_audio(audio_id: str):
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def health_root() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/api/health")
+async def health_api() -> dict[str, str]:
+    # Mirror the root health endpoint for frontend/API checks
     return {"status": "ok"}
 
