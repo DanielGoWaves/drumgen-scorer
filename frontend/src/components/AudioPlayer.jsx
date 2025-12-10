@@ -36,14 +36,6 @@ export default function AudioPlayer({ src }) {
       >
         Your browser does not support the audio element.
       </audio>
-      <div style={{ 
-        marginTop: '12px', 
-        fontSize: '12px', 
-        color: 'var(--text-secondary)',
-        textAlign: 'center'
-      }}>
-        🎧 Click play to listen to the generated drum sample
-      </div>
     </div>
   );
 }

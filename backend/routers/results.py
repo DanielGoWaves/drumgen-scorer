@@ -65,6 +65,8 @@ async def submit_score(
         model_version=payload.model_version,
         notes=payload.notes,
         notes_audio_path=payload.notes_audio_path,
+        illugen_generation_id=payload.illugen_generation_id,
+        illugen_attachments=payload.illugen_attachments,
     )
     session.add(result)
     await session.commit()
@@ -221,6 +223,7 @@ async def list_results(
                 or_(
                     and_(TestResult.notes.isnot(None), TestResult.notes != ""),
                     TestResult.notes_audio_path.isnot(None),
+                    TestResult.illugen_attachments.isnot(None),
                 )
             )
         else:
@@ -228,6 +231,7 @@ async def list_results(
                 and_(
                     or_(TestResult.notes.is_(None), TestResult.notes == ""),
                     TestResult.notes_audio_path.is_(None),
+                    TestResult.illugen_attachments.is_(None),
                 )
             )
     
@@ -271,6 +275,10 @@ async def update_result(
     if payload.notes_audio_path is not None:
         # Empty string clears the attachment
         result.notes_audio_path = payload.notes_audio_path or None
+    if payload.illugen_generation_id is not None:
+        result.illugen_generation_id = payload.illugen_generation_id
+    if payload.illugen_attachments is not None:
+        result.illugen_attachments = payload.illugen_attachments
     
     await session.commit()
     await session.refresh(result)

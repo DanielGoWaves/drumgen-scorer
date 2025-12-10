@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api, { API_BASE_URL } from '../services/api';
 import PromptDisplay from '../components/PromptDisplay';
 import AudioPlayer from '../components/AudioPlayer';
+import SimpleAudioPlayer from '../components/SimpleAudioPlayer';
 import ScoringSliders from '../components/ScoringSliders';
 import DifficultySlider from '../components/DifficultySlider';
 import JsonViewer from '../components/JsonViewer';
@@ -34,15 +35,18 @@ export default function TestingPage() {
   const [llmJson, setLlmJson] = useState(() => getInitialState('llmJson', null));
   const [llmResponse, setLlmResponse] = useState(() => getInitialState('llmResponse', null));
   const [audioUrl, setAudioUrl] = useState(() => getInitialState('audioUrl', ''));
+  const [illugenData, setIllugenData] = useState(() => getInitialState('illugenData', null));
   const [status, setStatus] = useState('');
   const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: null, llm_accuracy_score: null }));
   const [notes, setNotes] = useState(() => getInitialState('notes', ''));
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
   const [noteAudioFile, setNoteAudioFile] = useState(null);
   const [noteAudioPath, setNoteAudioPath] = useState('');
+  const [noteAttachments, setNoteAttachments] = useState(() => getInitialState('noteAttachments', []));
   const [noteDragActive, setNoteDragActive] = useState(false);
   const noteFileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [illugenLoading, setIllugenLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [freeTextMode, setFreeTextMode] = useState(() => getInitialState('freeTextMode', false));
   const [freeText, setFreeText] = useState(() => getInitialState('freeText', ''));
@@ -83,6 +87,10 @@ export default function TestingPage() {
   }, [audioUrl]);
   
   useEffect(() => {
+    sessionStorage.setItem('testingPage_illugenData', JSON.stringify(illugenData));
+  }, [illugenData]);
+  
+  useEffect(() => {
     sessionStorage.setItem('testingPage_scores', JSON.stringify(scores));
   }, [scores]);
   
@@ -105,6 +113,10 @@ export default function TestingPage() {
   useEffect(() => {
     sessionStorage.setItem('testingPage_notes', JSON.stringify(notes));
   }, [notes]);
+  
+  useEffect(() => {
+    sessionStorage.setItem('testingPage_noteAttachments', JSON.stringify(noteAttachments));
+  }, [noteAttachments]);
 
   // Track if we've loaded the initial prompt (only once per component lifecycle)
   const hasLoadedInitialPrompt = useRef(false);
@@ -159,6 +171,40 @@ export default function TestingPage() {
     handleNoteFileSelect(file);
   };
 
+  const resetNotesAndAttachments = () => {
+    setNotes('');
+    setNoteAudioFile(null);
+    setNoteAudioPath('');
+    setNoteAttachments([]);
+    setNoteDragActive(false);
+    if (noteFileInputRef.current) {
+      noteFileInputRef.current.value = '';
+    }
+  };
+
+  const toggleIllugenAttachment = (variation) => {
+    setNoteAttachments((prev) => {
+      const exists = prev.find((att) => att.type === 'illugen' && att.variation_id === variation.variation_id);
+      const order = (variation.order_index ?? 0) + 1;
+      if (exists) {
+        return prev.filter((att) => !(att.type === 'illugen' && att.variation_id === variation.variation_id));
+      }
+      return [
+        ...prev,
+        {
+          id: `illugen-${variation.variation_id}`,
+          type: 'illugen',
+          label: variation.title ? `${variation.title} (${order})` : `Illugen Variation ${order}`,
+          request_id: variation.request_id,
+          variation_id: variation.variation_id,
+          serve_path: variation.serve_path,
+          url: variation.url,
+        },
+      ];
+    });
+    setNotesPanelOpen(true);
+  };
+
   const uploadNoteAttachment = async () => {
     if (!noteAudioFile) return null;
     const formData = new FormData();
@@ -191,8 +237,9 @@ export default function TestingPage() {
       setLlmJson(null);
       setLlmResponse(null);
       setAudioUrl('');
+      setIllugenData(null);
       setScores({ audio_quality_score: null, llm_accuracy_score: null });
-      setNotes('');
+      resetNotesAndAttachments();
       setNotesPanelOpen(false);
       setStatus('');
       setUserModifiedVersion(false); // Reset user modification flag on new prompt
@@ -203,7 +250,7 @@ export default function TestingPage() {
     }
   };
 
-  const sendPrompt = async () => {
+  const sendPrompt = async (withIllugen = false) => {
     // Validate free text mode requirements
     if (freeTextMode) {
       // First check if prompt text is empty
@@ -228,19 +275,50 @@ export default function TestingPage() {
       }
     }
     
-    setStatus('Sending prompt to DrumGen...');
+    setStatus(withIllugen ? 'Sending prompt to DrumGen + Illugen...' : 'Sending prompt to DrumGen...');
     setLoading(true);
+    setIllugenLoading(withIllugen);
     try {
       const payload = freeTextMode 
         ? { text: freeText, model_version: modelVersion } 
         : { prompt_id: currentPrompt.id, model_version: modelVersion };
+      if (withIllugen) {
+        payload.illugen = true;
+        payload.illugen_sfx_type = 'one-shot';
+      }
       
       const { data } = await api.post('/api/test/send-prompt', payload);
       setLlmJson(data.llm_controls);
       setLlmResponse(data.llm_response || null);
       // Construct full audio URL using API base (for network access)
       setAudioUrl(data.audio_url ? `${API_BASE_URL}${data.audio_url}` : '');
-      
+      setNoteAttachments([]);
+      setNoteAudioFile(null);
+      setNoteAudioPath('');
+
+      if (withIllugen) {
+        const mappedVariations = (data.illugen_variations || []).map((v, idx) => ({
+          ...v,
+          request_id: v.request_id || (v.serve_path ? v.serve_path.split('/')?.[3] : undefined),
+          order_index: v.order_index ?? idx,
+          url: v.serve_path ? `${API_BASE_URL}${v.serve_path}` : v.url,
+        }));
+        setIllugenData({
+          generationId: data.illugen_generation_id || null,
+          variations: mappedVariations,
+          error: data.illugen_error || null,
+        });
+        if (data.illugen_error) {
+          setStatus(`⚠️ Illugen error: ${data.illugen_error}`);
+        } else if (!mappedVariations.length) {
+          setStatus('⚠️ Illugen returned no samples');
+        } else {
+          setStatus('✓ Received DrumGen + Illugen results');
+        }
+      } else {
+        setIllugenData(null);
+        setStatus('✓ Received JSON and audio from DrumGen');
+      }
       // Auto-extract drum type from LLM response for free text mode
       if (freeTextMode && data.drum_type) {
         setFreeTextMetadata({ ...freeTextMetadata, drum_type: data.drum_type });
@@ -250,17 +328,11 @@ export default function TestingPage() {
       setDifficultyError(false);
       setDrumTypeError(false);
       setFreeTextError(false);
-      
-      setStatus('✓ Received JSON and audio from DrumGen');
-      
-      // Auto-fade success message after 2 seconds
-      setTimeout(() => {
-        setStatus('');
-      }, 2000);
     } catch (err) {
       setStatus(`Error: ${err?.response?.data?.detail || err.message}`);
     } finally {
       setLoading(false);
+      setIllugenLoading(false);
     }
   };
 
@@ -308,16 +380,38 @@ export default function TestingPage() {
     setStatus('Submitting score...');
     try {
       let notesAudioPathValue = noteAudioPath || null;
+      let attachmentsPayload = [...noteAttachments];
       if (noteAudioFile) {
         try {
           const uploadedPath = await uploadNoteAttachment();
           notesAudioPathValue = uploadedPath;
+          attachmentsPayload = [
+            ...attachmentsPayload,
+            {
+              id: `upload-${Date.now()}`,
+              type: 'upload',
+              label: noteAudioFile.name,
+              serve_path: uploadedPath,
+              url: uploadedPath ? `${API_BASE_URL}${uploadedPath}` : '',
+            },
+          ];
         } catch (err) {
           setStatus(`Error uploading note audio: ${err?.response?.data?.detail || err.message}`);
           setSubmitting(false);
           setLoading(false);
           return;
         }
+      } else if (noteAudioPath) {
+        attachmentsPayload = [
+          ...attachmentsPayload,
+          {
+            id: 'upload-existing',
+            type: 'upload',
+            label: 'Note attachment',
+            serve_path: noteAudioPath,
+            url: `${API_BASE_URL}${noteAudioPath}`,
+          },
+        ];
       }
 
       const audioId = audioUrl?.split('/').pop() || null;
@@ -381,6 +475,8 @@ export default function TestingPage() {
         model_version: modelVersion,
         notes: notes.trim() || null,
         notes_audio_path: notesAudioPathValue,
+        illugen_generation_id: illugenData?.generationId || null,
+        illugen_attachments: attachmentsPayload.length ? { items: attachmentsPayload } : null,
       };
       
       // Add free text metadata if in free text mode
@@ -419,6 +515,8 @@ export default function TestingPage() {
       setPromptWasEdited(false);
       setNoteAudioFile(null);
       setNoteAudioPath('');
+      setNoteAttachments([]);
+      setIllugenData(null);
       setNoteDragActive(false);
       if (noteFileInputRef.current) {
         noteFileInputRef.current.value = '';
@@ -749,14 +847,39 @@ export default function TestingPage() {
           )
         )}
 
-        <button 
-          onClick={sendPrompt} 
-          disabled={loading || (!freeTextMode && !currentPrompt)}
-          className="btn btn-primary"
-          style={{ marginTop: '16px', width: '100%', justifyContent: 'center', zIndex: 1 }}
-        >
-          {loading ? '⏳ Generating...' : 'Generate'}
-        </button>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+          <button 
+            onClick={() => sendPrompt(false)} 
+            disabled={loading || illugenLoading || (!freeTextMode && !currentPrompt)}
+            className="btn btn-secondary"
+            style={{ width: '50%', justifyContent: 'center', zIndex: 1 }}
+          >
+            {loading && !illugenLoading ? '⏳ Generating...' : 'Generate'}
+          </button>
+          <button 
+            onClick={() => sendPrompt(true)} 
+            disabled={loading || illugenLoading || (!freeTextMode && !currentPrompt)}
+            className="btn btn-primary"
+            style={{ 
+              width: '50%', 
+              justifyContent: 'center', 
+              zIndex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(90deg, #8247ff, #54d0ff)',
+              boxShadow: illugenLoading ? '0 0 0 4px rgba(130,71,255,0.15)' : '0 10px 30px rgba(130,71,255,0.25)',
+              transition: 'transform 120ms ease, box-shadow 120ms ease'
+            }}
+          >
+            <img 
+              src="/illugen-icon.icns" 
+              alt="Illugen" 
+              style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'drop-shadow(0 0 6px rgba(84,208,255,0.5))' }} 
+            />
+            {illugenLoading ? '⏳ Generating + Illugen...' : 'Generate + Illugen'}
+          </button>
+        </div>
       </div>
 
       {/* Results Section - Only show after sending */}
@@ -771,13 +894,226 @@ export default function TestingPage() {
           </div>
 
 
-          {/* Audio Player and Scoring - Side by Side or Loading */}
+          {/* Audio Player and Scoring - Different layouts for Illugen vs regular */}
           {submitting ? (
             <div className="submission-loading-container">
               <div className="submission-loading-spinner"></div>
               <p className="submission-loading-text">Saving score...</p>
             </div>
+          ) : illugenData?.variations?.length ? (
+            /* Illugen Layout: Wider, symmetrical with simple play buttons */
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '480px 420px', gap: '20px', maxWidth: '920px', margin: '0 auto', alignItems: 'start' }}>
+                {/* Left Column: DrumGen Audio + Illugen Samples */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* DrumGen Audio */}
+                  <div className="card" style={{ zIndex: 1, padding: '16px' }}>
+                    <h3 className="label" style={{ fontSize: '16px', marginBottom: '10px' }}>
+                      DrumGen Audio
+                    </h3>
+                    <AudioPlayer src={audioUrl} />
+                  </div>
+
+                  {/* Illugen Samples */}
+                  <div className="card" style={{ zIndex: 1, padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <img src="/illugen-icon.icns" alt="Illugen" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+                      <h3 className="label" style={{ fontSize: '16px', margin: 0 }}>
+                        Illugen Samples
+                      </h3>
+                    </div>
+                    {illugenData.error && (
+                      <div style={{ color: '#f97316', fontSize: '12px', marginBottom: '10px' }}>
+                        Warning: {illugenData.error}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {illugenData.variations.map((variation, idx) => {
+                        const attached = noteAttachments.some((att) => att.type === 'illugen' && att.variation_id === variation.variation_id);
+                        return (
+                          <div key={variation.variation_id} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', minWidth: '65px' }}>
+                              Sample {idx + 1}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <SimpleAudioPlayer src={variation.url} />
+                            </div>
+                            <button
+                              onClick={() => toggleIllugenAttachment(variation)}
+                              className={attached ? 'btn btn-secondary' : 'btn btn-primary'}
+                              style={{ 
+                                minWidth: '32px',
+                                width: '32px',
+                                height: '32px',
+                                padding: '6px',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                fontSize: '14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                borderRadius: '6px'
+                              }}
+                              title={attached ? 'Attached to notes' : 'Attach to notes'}
+                            >
+                              📎
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Scoring + Notes */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
+                  {/* Scoring */}
+                  <div className="card" style={{ zIndex: 1, padding: '16px' }}>
+                    <h3 className="label" style={{ fontSize: '16px', marginBottom: '10px' }}>
+                      Score the Results
+                    </h3>
+                    <ScoringSliders 
+                      scores={scores} 
+                      onChange={(newScores) => {
+                        setScores(newScores);
+                        if (newScores.audio_quality_score !== null && newScores.audio_quality_score !== undefined) {
+                          setGenerationScoreError(false);
+                        }
+                        if (newScores.llm_accuracy_score !== null && newScores.llm_accuracy_score !== undefined) {
+                          setLlmScoreError(false);
+                        }
+                      }}
+                      generationError={generationScoreError}
+                      llmError={llmScoreError}
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div className="card" style={{ zIndex: 1, padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <h3 className="label" style={{ fontSize: '16px', marginBottom: '10px' }}>
+                      Notes
+                    </h3>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setNoteDragActive(true); }}
+                      onDragLeave={() => setNoteDragActive(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setNoteDragActive(false);
+                        const file = e.dataTransfer.files?.[0];
+                        handleNoteFileSelect(file);
+                      }}
+                      style={{
+                        position: 'relative',
+                        border: noteDragActive ? '1px dashed var(--secondary-color)' : '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '4px',
+                        background: noteDragActive ? 'rgba(99, 212, 255, 0.04)' : 'transparent',
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column'
+                      }}
+                    >
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Add notes... drag & drop a .wav for manual upload."
+                        className="input"
+                        style={{ 
+                          width: '100%', 
+                          fontFamily: 'inherit', 
+                          resize: 'none',
+                          flex: 1,
+                          minHeight: '100px',
+                          paddingRight: '45px'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => noteFileInputRef.current?.click()}
+                        className="btn btn-secondary"
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          bottom: '8px',
+                          padding: '6px 8px',
+                          fontSize: '14px',
+                          minWidth: 'auto'
+                        }}
+                        title="Attach .wav file from your computer"
+                      >
+                        📎
+                      </button>
+                      <input
+                        ref={noteFileInputRef}
+                        type="file"
+                        accept=".wav,audio/wav"
+                        style={{ display: 'none' }}
+                        onChange={handleNoteFileInput}
+                      />
+                    </div>
+                    <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      {noteAudioFile
+                        ? `Pending: ${noteAudioFile.name}`
+                        : noteAudioPath
+                        ? 'Manual upload attached'
+                        : 'Drag/drop or 📎 to attach .wav'}
+                    </div>
+                    {(noteAttachments.length > 0 || noteAudioFile) && (
+                      <div style={{ marginTop: '10px', padding: '8px', border: '1px dashed var(--border-color)', borderRadius: '6px', background: 'var(--secondary-bg)' }}>
+                        <div style={{ fontWeight: 600, marginBottom: '6px', fontSize: '13px' }}>Attachments</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
+                          {noteAttachments.map((att) => (
+                            <div key={att.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {att.type === 'illugen' ? '≈' : '📎'} {att.label}
+                              </span>
+                              <button
+                                onClick={() => setNoteAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+                                className="btn btn-secondary"
+                                style={{ padding: '3px 6px', fontSize: '11px' }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          {noteAudioFile && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                📎 {noteAudioFile.name}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setNoteAudioFile(null);
+                                  setNoteAudioPath('');
+                                  if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+                                }}
+                                className="btn btn-secondary"
+                                style={{ padding: '3px 6px', fontSize: '11px' }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div style={{ maxWidth: '920px', margin: '16px auto 0' }}>
+                <button 
+                  onClick={submitScoreAndNext} 
+                  disabled={loading || submitting}
+                  className="btn btn-primary"
+                  style={{ width: '100%', justifyContent: 'center', zIndex: 1 }}
+                >
+                  {freeTextMode ? 'Submit Score' : 'Submit Score & Next Prompt'}
+                </button>
+              </div>
+            </>
           ) : (
+            /* Regular Generate Layout: Side-by-side with collapsible notes */
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', maxWidth: '900px', margin: '0 auto' }}>
                 {/* Audio Player */}
@@ -797,7 +1133,6 @@ export default function TestingPage() {
                     scores={scores} 
                     onChange={(newScores) => {
                       setScores(newScores);
-                      // Clear errors when user sets scores
                       if (newScores.audio_quality_score !== null && newScores.audio_quality_score !== undefined) {
                         setGenerationScoreError(false);
                       }
@@ -812,7 +1147,7 @@ export default function TestingPage() {
               </div>
 
               {/* Notes Panel Toggle & Submit Button */}
-              <div style={{ maxWidth: '400px', margin: '0 auto', marginTop: '20px' }}>
+              <div style={{ maxWidth: '520px', margin: '0 auto', marginTop: '20px' }}>
                 {/* Notes Toggle Button */}
                 <button
                   onClick={() => setNotesPanelOpen(!notesPanelOpen)}
@@ -839,20 +1174,39 @@ export default function TestingPage() {
                           backgroundColor: '#ef4444'
                         }}
                       />
-                      {notesPanelOpen ? '▼ Hide Notes' : '▶ Add/Edit Notes'}
+                      {notesPanelOpen ? '▼ Hide notes + attachments' : '▶ Add notes (optional)'}
                     </>
                   ) : (
                     <>
-                      {notesPanelOpen ? '▼ Hide Notes' : '▶ Add Notes (Optional)'}
+                      {notesPanelOpen ? '▼ Hide notes + attachments' : '▶ Add notes (optional)'}
                     </>
                   )}
                 </button>
 
                 {/* Collapsible Notes Panel */}
-                {notesPanelOpen && (
-                  <div className="card" style={{ zIndex: 1, padding: '16px', marginBottom: '16px' }}>
+                <div 
+                  style={{ 
+                    overflow: 'hidden', 
+                    maxHeight: notesPanelOpen ? '1200px' : '0px', 
+                    transition: 'max-height 240ms ease', 
+                    marginBottom: notesPanelOpen ? '16px' : '0px'
+                  }}
+                  aria-hidden={!notesPanelOpen}
+                >
+                  <div 
+                    className="card" 
+                    style={{ 
+                      zIndex: 1, 
+                      padding: '16px', 
+                      opacity: notesPanelOpen ? 1 : 0, 
+                      transform: notesPanelOpen ? 'scaleX(1)' : 'scaleX(0.9)', 
+                      transformOrigin: 'left', 
+                      transition: 'opacity 200ms ease, transform 220ms ease',
+                      pointerEvents: notesPanelOpen ? 'auto' : 'none'
+                    }}
+                  >
                     <label className="label" style={{ fontSize: '14px', marginBottom: '8px', display: 'block' }}>
-                      Notes (Optional) + Audio Attachment:
+                      Notes (optional)
                     </label>
                     <div
                       onDragOver={(e) => { e.preventDefault(); setNoteDragActive(true); }}
@@ -874,7 +1228,7 @@ export default function TestingPage() {
                       <textarea
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Add notes... drag & drop a .wav here or tap the .wav icon to attach"
+                        placeholder="Add notes... drag & drop a .wav to attach."
                         rows={3}
                         className="input"
                         style={{ 
@@ -884,7 +1238,6 @@ export default function TestingPage() {
                           minHeight: '80px',
                           paddingRight: '90px'
                         }}
-                        autoFocus
                       />
                       <button
                         type="button"
@@ -902,7 +1255,7 @@ export default function TestingPage() {
                         }}
                         title="Attach .wav file from your computer"
                       >
-                        🎵 .wav
+                        📎 Attach .wav
                       </button>
                       <input
                         ref={noteFileInputRef}
@@ -914,13 +1267,35 @@ export default function TestingPage() {
                     </div>
                     <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                       {noteAudioFile
-                        ? `Attached: ${noteAudioFile.name}`
+                        ? `Pending upload: ${noteAudioFile.name}`
                         : noteAudioPath
                         ? 'Audio note attached'
-                        : 'You can drag & drop a .wav file or use the .wav button to attach an audio note.'}
+                        : 'Add a local .wav (drag/drop or paperclip).'}
                     </div>
+                    {(noteAudioFile || noteAudioPath) && (
+                      <div style={{ marginTop: '12px', padding: '10px', border: '1px dashed var(--border-color)', borderRadius: '8px', background: 'var(--secondary-bg)' }}>
+                        <div style={{ fontWeight: 600, marginBottom: '6px' }}>Attached</div>
+                        {noteAudioFile && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                            <span>Pending: {noteAudioFile.name}</span>
+                            <button
+                              onClick={() => {
+                                setNoteAudioFile(null);
+                                setNoteAudioPath('');
+                                if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+                              }}
+                              className="btn btn-secondary"
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                        {!noteAudioFile && noteAudioPath && <div>Upload attached</div>}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
 
                 {/* Submit Button */}
                 <button 

@@ -24,9 +24,9 @@ export default function ResultsPage() {
   const [hasNotesFilter, setHasNotesFilter] = useState(false);
   const [availableDrumTypes, setAvailableDrumTypes] = useState([]);
   
-  // Sorting
+  // Sorting - Default to most recent first
   const [sortColumn, setSortColumn] = useState('tested_at');
-  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+  const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
   
   // Update filters when navigating to results page with state (e.g., clicking from dashboard)
   // Use location.key to detect navigation changes even when pathname stays the same
@@ -265,6 +265,20 @@ export default function ResultsPage() {
 
       {/* Filters */}
       <div className="card" style={{ zIndex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Filters</h3>
+          <div style={{ 
+            padding: '6px 16px', 
+            background: 'var(--secondary-bg)', 
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: 'var(--primary-color)',
+            border: '1px solid var(--border-color)'
+          }}>
+            {results.length} {results.length === 1 ? 'result' : 'results'}
+          </div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
           <div>
             <label className="label">Drum Type</label>
@@ -561,7 +575,7 @@ export default function ResultsPage() {
             >
               <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 Result #{selectedResult.id}
-                {((selectedResult.notes && selectedResult.notes.trim()) || selectedResult.notes_audio_path) && (
+                {((selectedResult.notes && selectedResult.notes.trim()) || selectedResult.notes_audio_path || (selectedResult.illugen_attachments && selectedResult.illugen_attachments.items && selectedResult.illugen_attachments.items.length)) && (
                   <span 
                     style={{
                       display: 'inline-block',
@@ -641,6 +655,43 @@ export default function ResultsPage() {
                   </a>
                 </div>
               )}
+
+              {!editMode && selectedResult.illugen_attachments?.items?.length ? (
+                <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(84,208,255,0.07)', borderRadius: '8px', border: '1px solid rgba(84,208,255,0.2)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <img src="/illugen-icon.icns" alt="Illugen" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+                    Illugen attachments
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {selectedResult.illugen_attachments.items.map((att) => (
+                      <div key={att.id} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--secondary-bg)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                            <img src="/illugen-icon.icns" alt="Illugen" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+                            {att.label || 'Illugen Sample'}
+                          </div>
+                          {att.request_id && (
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Req: {att.request_id}</span>
+                          )}
+                        </div>
+                        {(() => {
+                          const playable = att.url
+                            ? (att.url.startsWith('http') ? att.url : `${API_BASE_URL}${att.url}`)
+                            : att.serve_path
+                              ? `${API_BASE_URL}${att.serve_path}`
+                              : null;
+                          return playable ? <AudioPlayer src={playable} /> : null;
+                        })()}
+                        {(att.serve_path || att.url) && (
+                          <a href={att.serve_path ? `${API_BASE_URL}${att.serve_path}` : att.url} target="_blank" rel="noreferrer" style={{ fontSize: '12px', color: 'var(--secondary-color)' }}>
+                            Download
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {/* Scores */}
               <div style={{ marginBottom: '20px' }}>

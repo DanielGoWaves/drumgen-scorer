@@ -38,6 +38,10 @@ async def init_models() -> None:
         columns = [row[1] for row in result.fetchall()]
         if "notes_audio_path" not in columns:
             await conn.execute(text("ALTER TABLE test_results ADD COLUMN notes_audio_path TEXT"))
+        if "illugen_generation_id" not in columns:
+            await conn.execute(text("ALTER TABLE test_results ADD COLUMN illugen_generation_id INTEGER"))
+        if "illugen_attachments" not in columns:
+            await conn.execute(text("ALTER TABLE test_results ADD COLUMN illugen_attachments JSON"))
 
 
 @app.on_event("startup")
@@ -58,6 +62,15 @@ async def serve_audio(audio_id: str):
     audio_path = Path(f"./audio_files/{audio_id}.wav")
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(audio_path, media_type="audio/wav")
+
+
+@app.get("/api/illugen/audio/{request_id}/{filename}")
+async def serve_illugen_audio(request_id: str, filename: str):
+    """Serve locally stored Illugen audio files."""
+    audio_path = Path(f"./illugen_audio/{request_id}/{filename}")
+    if not audio_path.exists():
+        raise HTTPException(status_code=404, detail="Illugen audio file not found")
     return FileResponse(audio_path, media_type="audio/wav")
 
 

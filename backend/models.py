@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, conint
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,10 +41,28 @@ class TestResult(Base):
     audio_file_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     notes_audio_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    illugen_generation_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("illugen_generations.id", ondelete="SET NULL"), nullable=True
+    )
+    illugen_attachments: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     tested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     prompt: Mapped["Prompt"] = relationship("Prompt", back_populates="results")
+    illugen_generation: Mapped[Optional["IllugenGeneration"]] = relationship("IllugenGeneration", back_populates="results")
+
+
+class IllugenGeneration(Base):
+    __tablename__ = "illugen_generations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
+    sfx_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    variations: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    results: Mapped[list["TestResult"]] = relationship("TestResult", back_populates="illugen_generation")
 
 
 # Pydantic schemas
@@ -83,6 +101,8 @@ class TestResultCreate(BaseModel):
     model_version: Optional[str] = None
     notes: Optional[str] = None
     notes_audio_path: Optional[str] = None
+    illugen_generation_id: Optional[int] = None
+    illugen_attachments: Optional[dict[str, Any]] = None
     
     # For free text prompts - user provides these
     free_text_prompt: Optional[str] = None
@@ -102,6 +122,8 @@ class TestResultRead(BaseModel):
     audio_file_path: Optional[str]
     model_version: Optional[str]
     notes_audio_path: Optional[str]
+    illugen_generation_id: Optional[int]
+    illugen_attachments: Optional[dict[str, Any]]
     tested_at: datetime
     notes: Optional[str]
 
@@ -114,4 +136,6 @@ class TestResultUpdate(BaseModel):
     llm_accuracy_score: Optional[conint(ge=1, le=10)] = None
     notes: Optional[str] = None
     notes_audio_path: Optional[str] = None
+    illugen_generation_id: Optional[int] = None
+    illugen_attachments: Optional[dict[str, Any]] = None
 
