@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import api, { API_BASE_URL } from '../services/api';
 import AudioPlayer from '../components/AudioPlayer';
-import JsonViewer from '../components/JsonViewer';
 
 export default function ResultsPage() {
   const location = useLocation();
@@ -380,12 +379,14 @@ export default function ResultsPage() {
               maxWidth: '800px',
               width: '100%',
               maxHeight: '90vh',
-              overflow: 'auto',
-              position: 'relative'
+              overflow: 'hidden',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close button */}
+            {/* Close button - fixed to modal card, outside scrollable area */}
             <button
               onClick={closeDetail}
               style={{
@@ -397,107 +398,134 @@ export default function ResultsPage() {
                 fontSize: '24px',
                 cursor: 'pointer',
                 color: 'var(--text-secondary)',
-                padding: '4px 8px'
+                padding: '4px 8px',
+                zIndex: 10,
+                transition: 'color 0.2s ease'
               }}
+              onMouseEnter={(e) => e.target.style.color = 'var(--text-primary)'}
+              onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary)'}
             >
               ×
             </button>
 
-            <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
-              Result #{selectedResult.id}
-            </h3>
+            {/* Scrollable content area */}
+            <div 
+              style={{ 
+                overflowY: 'auto', 
+                flex: 1, 
+                paddingRight: '8px'
+              }}
+              className="custom-scrollbar"
+            >
+              <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>
+                Result #{selectedResult.id}
+              </h3>
 
-            {/* Prompt Info */}
-            <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Prompt:</div>
-              <div style={{ fontSize: '15px' }}>{prompts[selectedResult.prompt_id]?.text}</div>
-              <div style={{ marginTop: '12px', display: 'flex', gap: '20px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <span>Drum: <strong>{prompts[selectedResult.prompt_id]?.drum_type}</strong></span>
-                <span>Difficulty: <strong>{prompts[selectedResult.prompt_id]?.difficulty}</strong></span>
-                <span>Version: <strong>{selectedResult.model_version?.toUpperCase()}</strong></span>
-              </div>
-            </div>
-
-            {/* Audio Player */}
-            {selectedResult.audio_id && (
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Audio:</div>
-                <AudioPlayer src={`${API_BASE_URL}/api/audio/${selectedResult.audio_id}`} />
-              </div>
-            )}
-
-            {/* Scores */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Scores:</div>
-              {editMode ? (
-                <div style={{ display: 'grid', gap: '16px' }}>
-                  <div>
-                    <label className="label">Generation Score: {editedScores.audio_quality_score}</label>
-                    <input 
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={editedScores.audio_quality_score}
-                      onChange={(e) => setEditedScores({...editedScores, audio_quality_score: parseInt(e.target.value)})}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">LLM Score: {editedScores.llm_accuracy_score}</label>
-                    <input 
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={editedScores.llm_accuracy_score}
-                      onChange={(e) => setEditedScores({...editedScores, llm_accuracy_score: parseInt(e.target.value)})}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Notes:</label>
-                    <textarea 
-                      value={editedScores.notes}
-                      onChange={(e) => setEditedScores({...editedScores, notes: e.target.value})}
-                      className="input"
-                      rows="3"
-                      placeholder="Add notes..."
-                    />
-                  </div>
+              {/* Prompt Info */}
+              <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Prompt:</div>
+                <div style={{ fontSize: '15px' }}>{prompts[selectedResult.prompt_id]?.text}</div>
+                <div style={{ marginTop: '12px', display: 'flex', gap: '20px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <span>Drum: <strong>{prompts[selectedResult.prompt_id]?.drum_type}</strong></span>
+                  <span>Difficulty: <strong>{prompts[selectedResult.prompt_id]?.difficulty}</strong></span>
+                  <span>Version: <strong>{selectedResult.model_version?.toUpperCase()}</strong></span>
                 </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div style={{ padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Generation Score</div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--success-color)' }}>
-                      {selectedResult.audio_quality_score}/10
+              </div>
+
+              {/* Audio Player */}
+              {selectedResult.audio_id && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Audio:</div>
+                  <AudioPlayer src={`${API_BASE_URL}/api/audio/${selectedResult.audio_id}`} />
+                </div>
+              )}
+
+              {/* Scores */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Scores:</div>
+                {editMode ? (
+                  <div style={{ display: 'grid', gap: '16px' }}>
+                    <div>
+                      <label className="label">Generation Score: {editedScores.audio_quality_score}</label>
+                      <input 
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={editedScores.audio_quality_score}
+                        onChange={(e) => setEditedScores({...editedScores, audio_quality_score: parseInt(e.target.value)})}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">LLM Score: {editedScores.llm_accuracy_score}</label>
+                      <input 
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={editedScores.llm_accuracy_score}
+                        onChange={(e) => setEditedScores({...editedScores, llm_accuracy_score: parseInt(e.target.value)})}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Notes:</label>
+                      <textarea 
+                        value={editedScores.notes}
+                        onChange={(e) => setEditedScores({...editedScores, notes: e.target.value})}
+                        className="input"
+                        rows="3"
+                        placeholder="Add notes..."
+                      />
                     </div>
                   </div>
-                  <div style={{ padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>LLM Score</div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--secondary-color)' }}>
-                      {selectedResult.llm_accuracy_score}/10
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Generation Score</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--success-color)' }}>
+                        {selectedResult.audio_quality_score}/10
+                      </div>
                     </div>
+                    <div style={{ padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>LLM Score</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--secondary-color)' }}>
+                        {selectedResult.llm_accuracy_score}/10
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {selectedResult.notes && !editMode && (
+                  <div style={{ marginTop: '12px', padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Notes:</div>
+                    <div style={{ fontSize: '14px' }}>{selectedResult.notes}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* LLM Response Text */}
+              {selectedResult.llm_response && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>LLM Response:</div>
+                  <div 
+                    style={{ 
+                      padding: '12px', 
+                      background: 'var(--secondary-bg)', 
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      fontFamily: 'monospace',
+                      border: '1px solid var(--border-color)'
+                    }}
+                  >
+                    {selectedResult.llm_response}
                   </div>
                 </div>
               )}
-              {selectedResult.notes && !editMode && (
-                <div style={{ marginTop: '12px', padding: '12px', background: 'var(--secondary-bg)', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Notes:</div>
-                  <div style={{ fontSize: '14px' }}>{selectedResult.notes}</div>
-                </div>
-              )}
             </div>
 
-            {/* LLM JSON */}
-            {selectedResult.generated_json && (
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>LLM Response:</div>
-                <JsonViewer json={selectedResult.generated_json} />
-              </div>
-            )}
-
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: '12px', marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+            {/* Actions - Fixed at bottom */}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', flexShrink: 0 }}>
               {editMode ? (
                 <>
                   <button onClick={saveEdit} className="btn btn-primary" style={{ flex: 1 }}>
