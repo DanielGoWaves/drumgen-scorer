@@ -44,7 +44,26 @@ Double-click the **DrumGenServers** icon on your Desktop. This will:
 - Automatically open Chrome to http://localhost:5173
 - Keep servers running until you close the terminal
 
-### Option 2: Manual Start
+### Option 2: Using Startup Scripts (Recommended)
+
+**Start both servers (always runs on main branch):**
+```bash
+./scripts/start_servers.sh
+```
+
+**Start backend only:**
+```bash
+./scripts/start_backend.sh
+```
+
+**Start frontend only:**
+```bash
+./scripts/start_frontend.sh
+```
+
+**Note:** These scripts automatically switch to the `main` branch before starting, ensuring the server always runs production code even if you're on the `dev` branch in your editor.
+
+### Option 3: Manual Start
 
 **Backend:**
 ```bash
@@ -121,6 +140,16 @@ Note: SSL verification is disabled for the internal Waves server.
 - Frontend uses modern React hooks and functional components
 - All styling matches DrumGen website theme via `theme.css`
 - CORS enabled for local development
+
+### DEV Badge
+
+When working on the `dev` branch, a red "DEV" badge appears next to the "DrumGen Scorer" title in the header. This badge:
+- Automatically appears when you checkout the `dev` branch
+- Automatically disappears when you checkout the `main` branch
+- Is automatically removed before committing to `main` (via git hooks)
+- Cannot be pushed to `main` (pre-push hook protection)
+
+**Important:** The server startup scripts (`scripts/start_*.sh`) always run on the `main` branch, ensuring production code is served even when developing on `dev`.
 
 ## Backup & Persistence
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDrumType, setSelectedDrumType] = useState('all');
@@ -11,6 +12,7 @@ export default function DashboardPage() {
   const [availableDrumTypes, setAvailableDrumTypes] = useState([]);
   const [showScoreTooltip, setShowScoreTooltip] = useState(false);
   const [hoveredSegment, setHoveredSegment] = useState(null);
+  const prevPathname = useRef(location.pathname);
 
   // All possible versions from the generation website
   const ALL_VERSIONS = ['v11', 'v12', 'v13'];
@@ -19,6 +21,20 @@ export default function DashboardPage() {
     loadDrumTypes();
     loadAnalytics();
   }, []);
+
+  // Refresh analytics when navigating to dashboard from another page
+  // This ensures the dashboard shows current data when returning (e.g., after deleting a result)
+  useEffect(() => {
+    const wasOnDashboard = prevPathname.current === '/dashboard';
+    const isNowOnDashboard = location.pathname === '/dashboard';
+    
+    // If we navigated TO dashboard FROM another page, refresh the data
+    if (!wasOnDashboard && isNowOnDashboard) {
+      loadAnalytics();
+    }
+    
+    prevPathname.current = location.pathname;
+  }, [location.pathname]);
 
   useEffect(() => {
     loadAnalytics();
@@ -342,8 +358,8 @@ export default function DashboardPage() {
                                   state: {
                                     difficulty: diff.difficulty,
                                     audioScore: segment.score,
-                                    drumType: selectedDrumType !== 'all' ? selectedDrumType : null,
-                                    modelVersion: selectedVersion !== 'all' ? selectedVersion : null
+                                    drumType: selectedDrumType !== 'all' ? selectedDrumType : 'all',
+                                    modelVersion: selectedVersion !== 'all' ? selectedVersion : 'all'
                                   }
                                 });
                               }}
@@ -358,16 +374,35 @@ export default function DashboardPage() {
                                   background: 'var(--primary-bg)',
                                   border: '1px solid var(--border-color)',
                                   borderRadius: '6px',
-                                  padding: '10px 12px',
+                                  padding: '12px 14px',
                                   fontSize: '12px',
                                   whiteSpace: 'nowrap',
                                   boxShadow: '0 6px 16px rgba(0,0,0,0.4)',
                                   zIndex: 4000,
-                                  marginBottom: '6px'
+                                  marginBottom: '6px',
+                                  minWidth: '140px'
                                 }}>
-                                  Difficulty {diff.difficulty} • Score {segment.score}<br />
-                                  {segment.count} test{segment.count !== 1 ? 's' : ''}<br />
-                                  <span style={{ fontSize: '11px', opacity: 0.7, fontStyle: 'italic' }}>Click to view results →</span>
+                                  <div style={{ 
+                                    fontSize: '20px', 
+                                    fontWeight: '700', 
+                                    color: 'var(--primary-color)',
+                                    marginBottom: '8px',
+                                    lineHeight: '1.2'
+                                  }}>
+                                    {segment.count} test{segment.count !== 1 ? 's' : ''}
+                                  </div>
+                                  <div style={{ 
+                                    fontSize: '11px', 
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: '6px',
+                                    borderBottom: '1px solid var(--border-color)',
+                                    paddingBottom: '6px'
+                                  }}>
+                                    <span>Score </span>
+                                    <span style={{ fontSize: '11px', fontWeight: '700', color: getScoreColor(segment.score) }}>{segment.score}</span>
+                                    <span>, Difficulty {diff.difficulty}</span>
+                                  </div>
+                                  <span style={{ fontSize: '10px', opacity: 0.7, fontStyle: 'italic', color: 'var(--text-secondary)' }}>Click to view results →</span>
                                 </div>
                               )}
                             </div>

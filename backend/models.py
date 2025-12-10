@@ -72,8 +72,8 @@ class PromptRead(BaseModel):
 
 class TestResultCreate(BaseModel):
     prompt_id: Optional[int] = None
-    audio_quality_score: conint(ge=0, le=10)
-    llm_accuracy_score: conint(ge=0, le=10)
+    audio_quality_score: conint(ge=1, le=10)
+    llm_accuracy_score: conint(ge=1, le=10)
     generated_json: Optional[dict[str, Any]] = None
     audio_id: Optional[str] = None
     audio_file_path: Optional[str] = None
@@ -104,7 +104,7 @@ class TestResultRead(BaseModel):
 
 
 class TestResultUpdate(BaseModel):
-    audio_quality_score: Optional[conint(ge=0, le=10)] = None
-    llm_accuracy_score: Optional[conint(ge=0, le=10)] = None
+    audio_quality_score: Optional[conint(ge=1, le=10)] = None
+    llm_accuracy_score: Optional[conint(ge=1, le=10)] = None
     notes: Optional[str] = None
 

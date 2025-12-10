@@ -193,15 +193,18 @@ async def list_results(
     session: AsyncSession = Depends(get_session),
 ) -> List[TestResultRead]:
     """Get paginated list of test results with optional filtering."""
+    # Use left join to ensure all results are returned even if prompt is missing
+    # But since we always create prompts (even for free text), inner join should work
     query = select(TestResult).join(Prompt, TestResult.prompt_id == Prompt.id)
     
-    if drum_type:
+    # Apply filters - only add where clause if value is provided and not empty
+    if drum_type and drum_type.strip():
         query = query.where(Prompt.drum_type == drum_type)
-    if difficulty:
+    if difficulty is not None:
         query = query.where(Prompt.difficulty == difficulty)
-    if model_version:
+    if model_version and model_version.strip():
         query = query.where(TestResult.model_version == model_version)
-    if audio_quality_score:
+    if audio_quality_score is not None:
         query = query.where(TestResult.audio_quality_score == audio_quality_score)
     
     query = query.order_by(TestResult.tested_at.desc()).offset(offset).limit(limit)

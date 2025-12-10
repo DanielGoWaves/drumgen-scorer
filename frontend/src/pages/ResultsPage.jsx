@@ -15,17 +15,35 @@ export default function ResultsPage() {
   
   // Filters (initialize from navigation state if provided)
   const [drumTypeFilter, setDrumTypeFilter] = useState(location.state?.drumType || 'all');
-  const [difficultyFilter, setDifficultyFilter] = useState(location.state?.difficulty || 'all');
+  const [difficultyFilter, setDifficultyFilter] = useState(location.state?.difficulty ? String(location.state.difficulty) : 'all');
   const [versionFilter, setVersionFilter] = useState(location.state?.modelVersion || 'all');
-  const [audioScoreFilter, setAudioScoreFilter] = useState(location.state?.audioScore || 'all');
+  const [audioScoreFilter, setAudioScoreFilter] = useState(location.state?.audioScore ? String(location.state.audioScore) : 'all');
   const [availableDrumTypes, setAvailableDrumTypes] = useState([]);
   
   // Sorting
   const [sortColumn, setSortColumn] = useState('tested_at');
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
   
+  // Update filters when navigating to results page with state (e.g., clicking from dashboard)
+  // Use location.key to detect navigation changes even when pathname stays the same
+  useEffect(() => {
+    const state = location.state;
+    if (state) {
+      // Update filters from navigation state - always update when state is present
+      setDrumTypeFilter(state.drumType || 'all');
+      setDifficultyFilter(state.difficulty !== undefined && state.difficulty !== null ? String(state.difficulty) : 'all');
+      setVersionFilter(state.modelVersion || 'all');
+      setAudioScoreFilter(state.audioScore !== undefined && state.audioScore !== null ? String(state.audioScore) : 'all');
+    }
+  }, [location.key, location.state]);
+  
+  // Load results when filters change
   useEffect(() => {
     loadResults();
+  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter]);
+  
+  // Load drum types once on mount
+  useEffect(() => {
     loadDrumTypes();
   }, []);
 
@@ -212,7 +230,7 @@ export default function ResultsPage() {
             <select value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)} className="input">
               <option value="all">All</option>
               {[...Array(10)].map((_, i) => (
-                <option key={i + 1} value={i + 1}>{i + 1}</option>
+                <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
               ))}
             </select>
           </div>
@@ -229,8 +247,8 @@ export default function ResultsPage() {
             <label className="label">Generation Score</label>
             <select value={audioScoreFilter} onChange={(e) => setAudioScoreFilter(e.target.value)} className="input">
               <option value="all">All</option>
-              {[...Array(11)].map((_, i) => (
-                <option key={i} value={i}>{i}</option>
+              {[...Array(10)].map((_, i) => (
+                <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
               ))}
             </select>
           </div>
@@ -417,7 +435,7 @@ export default function ResultsPage() {
                     <label className="label">Generation Score: {editedScores.audio_quality_score}</label>
                     <input 
                       type="range"
-                      min="0"
+                      min="1"
                       max="10"
                       value={editedScores.audio_quality_score}
                       onChange={(e) => setEditedScores({...editedScores, audio_quality_score: parseInt(e.target.value)})}
@@ -428,7 +446,7 @@ export default function ResultsPage() {
                     <label className="label">LLM Score: {editedScores.llm_accuracy_score}</label>
                     <input 
                       type="range"
-                      min="0"
+                      min="1"
                       max="10"
                       value={editedScores.llm_accuracy_score}
                       onChange={(e) => setEditedScores({...editedScores, llm_accuracy_score: parseInt(e.target.value)})}

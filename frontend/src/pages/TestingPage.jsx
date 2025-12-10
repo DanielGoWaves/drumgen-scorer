@@ -3,6 +3,7 @@ import api, { API_BASE_URL } from '../services/api';
 import PromptDisplay from '../components/PromptDisplay';
 import AudioPlayer from '../components/AudioPlayer';
 import ScoringSliders from '../components/ScoringSliders';
+import DifficultySlider from '../components/DifficultySlider';
 import JsonViewer from '../components/JsonViewer';
 
 export default function TestingPage() {
@@ -33,7 +34,7 @@ export default function TestingPage() {
   const [llmJson, setLlmJson] = useState(() => getInitialState('llmJson', null));
   const [audioUrl, setAudioUrl] = useState(() => getInitialState('audioUrl', ''));
   const [status, setStatus] = useState('');
-  const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: 5, llm_accuracy_score: 5 }));
+  const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: null, llm_accuracy_score: null }));
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [freeTextMode, setFreeTextMode] = useState(() => getInitialState('freeTextMode', false));
@@ -43,8 +44,14 @@ export default function TestingPage() {
   // Free text metadata - user fills these in after generation
   const [freeTextMetadata, setFreeTextMetadata] = useState(() => getInitialState('freeTextMetadata', {
     drum_type: '',
-    difficulty: 5
+    difficulty: null
   }));
+  const [difficultyError, setDifficultyError] = useState(false);
+  const [drumTypeError, setDrumTypeError] = useState(false);
+  const [freeTextError, setFreeTextError] = useState(false);
+  const [generationScoreError, setGenerationScoreError] = useState(false);
+  const [llmScoreError, setLlmScoreError] = useState(false);
+  
 
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
@@ -125,7 +132,7 @@ export default function TestingPage() {
       setCurrentPrompt(data);
       setLlmJson(null);
       setAudioUrl('');
-      setScores({ audio_quality_score: 5, llm_accuracy_score: 5 });
+      setScores({ audio_quality_score: null, llm_accuracy_score: null });
       setStatus('');
       setUserModifiedVersion(false); // Reset user modification flag on new prompt
     } catch (err) {
@@ -136,6 +143,47 @@ export default function TestingPage() {
   };
 
   const sendPrompt = async () => {
+    // Validate free text mode requirements
+    if (freeTextMode) {
+      // First check if prompt text is empty
+      if (!freeText.trim()) {
+        setFreeTextError(true);
+        setTimeout(() => {
+          setFreeTextError(false);
+        }, 2400);
+        return;
+      }
+      
+      // If prompt exists, check mode and difficulty
+      const hasDrumType = !!freeTextMetadata.drum_type;
+      const hasDifficulty = freeTextMetadata.difficulty !== null && freeTextMetadata.difficulty !== undefined;
+      
+      if (!hasDrumType && !hasDifficulty) {
+        // Both missing - flash both
+        setDrumTypeError(true);
+        setDifficultyError(true);
+        setTimeout(() => {
+          setDrumTypeError(false);
+          setDifficultyError(false);
+        }, 2400);
+        return;
+      } else if (!hasDrumType) {
+        // Only drum type missing
+        setDrumTypeError(true);
+        setTimeout(() => {
+          setDrumTypeError(false);
+        }, 2400);
+        return;
+      } else if (!hasDifficulty) {
+        // Only difficulty missing
+        setDifficultyError(true);
+        setTimeout(() => {
+          setDifficultyError(false);
+        }, 2400);
+        return;
+      }
+    }
+    
     setStatus('Sending prompt to DrumGen...');
     setLoading(true);
     try {
@@ -148,13 +196,10 @@ export default function TestingPage() {
       // Construct full audio URL using API base (for network access)
       setAudioUrl(data.audio_url ? `${API_BASE_URL}${data.audio_url}` : '');
       
-      // For free text, extract drum type from LLM response as suggestion
-      if (freeTextMode && data.llm_controls && data.llm_controls.Kind) {
-        setFreeTextMetadata({
-          ...freeTextMetadata,
-          drum_type: data.llm_controls.Kind
-        });
-      }
+      // Clear errors on successful send
+      setDifficultyError(false);
+      setDrumTypeError(false);
+      setFreeTextError(false);
       
       setStatus('✓ Received JSON and audio from DrumGen');
       
@@ -175,8 +220,37 @@ export default function TestingPage() {
       return;
     }
     
+    // Note: Drum type and difficulty are now validated before sending to DrumGen,
+    // so they should always be set at this point. But keep validation as safety check.
     if (freeTextMode && !freeTextMetadata.drum_type) {
       setStatus('Please select a drum type for the free text prompt.');
+      return;
+    }
+    
+    if (freeTextMode && (freeTextMetadata.difficulty === null || freeTextMetadata.difficulty === undefined)) {
+      setStatus('Please set the difficulty before submitting.');
+      return;
+    }
+    
+    // Check that both scores are set
+    let hasError = false;
+    if (scores.audio_quality_score === null || scores.audio_quality_score === undefined) {
+      setGenerationScoreError(true);
+      hasError = true;
+      setTimeout(() => {
+        setGenerationScoreError(false);
+      }, 2000);
+    }
+    
+    if (scores.llm_accuracy_score === null || scores.llm_accuracy_score === undefined) {
+      setLlmScoreError(true);
+      hasError = true;
+      setTimeout(() => {
+        setLlmScoreError(false);
+      }, 2000);
+    }
+    
+    if (hasError) {
       return;
     }
     
@@ -219,9 +293,9 @@ export default function TestingPage() {
       } else {
         setLlmJson(null);
         setAudioUrl('');
-        setScores({ audio_quality_score: 5, llm_accuracy_score: 5 });
+        setScores({ audio_quality_score: null, llm_accuracy_score: null });
         setFreeText('');
-        setFreeTextMetadata({ drum_type: '', difficulty: 5 });
+        setFreeTextMetadata({ drum_type: '', difficulty: null });
         setSubmitting(false);
       }
     } catch (err) {
@@ -279,20 +353,108 @@ export default function TestingPage() {
       <div className="card" style={{ zIndex: 1 }}>
         {freeTextMode ? (
           <div style={{ zIndex: 1 }}>
-            <label className="label">Enter your prompt:</label>
-            <textarea
-              value={freeText}
-              onChange={(e) => setFreeText(e.target.value)}
-              placeholder="Describe the drum sound you want... (Tip: Switch to V13 for cymbals)"
-              rows={4}
-              className="input"
-              style={{ 
-                marginTop: '8px', 
-                fontFamily: 'inherit',
-                resize: 'vertical',
-                zIndex: 1 
-              }}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '32px', alignItems: 'start' }}>
+              {/* Left: Prompt Input - Wider */}
+              <div>
+                <label className="label" style={{ marginBottom: '8px', display: 'block' }}>Enter your prompt:</label>
+                <textarea
+                  value={freeText}
+                  onChange={(e) => {
+                    setFreeText(e.target.value);
+                    setFreeTextError(false);
+                  }}
+                  placeholder="Describe the drum sound you want... (Tip: Switch to V13 for cymbals)"
+                  rows={6}
+                  className={`input ${freeTextError ? 'flash-error-active' : ''}`}
+                  style={{ 
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    zIndex: 1,
+                    width: '100%',
+                    minHeight: '140px',
+                    ...(freeTextError ? {
+                      borderColor: 'var(--secondary-color)',
+                      borderWidth: '2px',
+                      backgroundColor: 'rgba(199, 155, 255, 0.08)'
+                    } : {})
+                  }}
+                />
+              </div>
+              
+              {/* Right: Drum Type and Difficulty Stacked */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'stretch', paddingTop: '28px' }}>
+                {/* Drum Type */}
+                <div style={{ zIndex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <label className="label" style={{ margin: 0, minWidth: '85px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', textAlign: 'right' }}>
+                      Mode:
+                    </label>
+                    <select
+                      value={freeTextMetadata.drum_type}
+                      onChange={(e) => {
+                        setFreeTextMetadata({ ...freeTextMetadata, drum_type: e.target.value });
+                        setDrumTypeError(false);
+                      }}
+                      className={`input ${drumTypeError ? 'flash-error-active' : ''}`}
+                      style={{ 
+                        cursor: 'pointer',
+                        flex: 1,
+                        ...(drumTypeError ? {
+                          borderColor: 'var(--secondary-color)',
+                          borderWidth: '2px',
+                          backgroundColor: 'rgba(199, 155, 255, 0.08)'
+                        } : {})
+                      }}
+                    >
+                      <option value="">Select...</option>
+                      <option value="kick">Kick</option>
+                      <option value="snare">Snare</option>
+                      <option value="hihat">Hihat</option>
+                      <option value="closed hihat">Closed Hihat</option>
+                      <option value="open hihat">Open Hihat</option>
+                      <option value="ride">Ride</option>
+                      <option value="crash">Crash</option>
+                      <option value="tom">Tom</option>
+                      <option value="floor tom">Floor Tom</option>
+                      <option value="rack tom">Rack Tom</option>
+                      <option value="china">China</option>
+                      <option value="splash">Splash</option>
+                      <option value="cowbell">Cowbell</option>
+                      <option value="tambourine">Tambourine</option>
+                      <option value="shaker">Shaker</option>
+                      <option value="clap">Clap</option>
+                      <option value="snap">Snap</option>
+                      <option value="bongo">Bongo</option>
+                      <option value="triangle">Triangle</option>
+                      <option value="woodblock">Woodblock</option>
+                      <option value="cabasa">Cabasa</option>
+                      <option value="fx">FX</option>
+                      <option value="scratch">Scratch</option>
+                      <option value="impact">Impact</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {/* Difficulty */}
+                <div style={{ zIndex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <label className="label" style={{ margin: 0, minWidth: '85px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', textAlign: 'right' }}>
+                      Difficulty:
+                    </label>
+                    <div style={{ flex: 1 }}>
+                      <DifficultySlider 
+                        value={freeTextMetadata.difficulty}
+                        onChange={(value) => {
+                          setFreeTextMetadata({ ...freeTextMetadata, difficulty: value });
+                          setDifficultyError(false);
+                        }}
+                        showError={difficultyError}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           currentPrompt && (
@@ -330,11 +492,11 @@ export default function TestingPage() {
 
         <button 
           onClick={sendPrompt} 
-          disabled={loading || (!freeTextMode && !currentPrompt) || (freeTextMode && !freeText.trim())}
+          disabled={loading || (!freeTextMode && !currentPrompt)}
           className="btn btn-primary"
           style={{ marginTop: '16px', width: '100%', justifyContent: 'center', zIndex: 1 }}
         >
-          {loading ? '⏳ Generating...' : '🎵 Send to DrumGen'}
+          {loading ? '⏳ Generating...' : 'Generate'}
         </button>
       </div>
 
@@ -349,66 +511,6 @@ export default function TestingPage() {
             <JsonViewer data={llmJson} />
           </div>
 
-          {/* Free Text Metadata - Only in Free Text Mode */}
-          {freeTextMode && (
-            <div className="card" style={{ zIndex: 1 }}>
-              <h3 className="label" style={{ fontSize: '18px', marginBottom: '16px', zIndex: 1 }}>
-                Tag Your Prompt
-              </h3>
-              <div style={{ display: 'grid', gap: '16px' }}>
-                <div style={{ zIndex: 1 }}>
-                  <label className="label">Drum Type *</label>
-                  <select
-                    value={freeTextMetadata.drum_type}
-                    onChange={(e) => setFreeTextMetadata({ ...freeTextMetadata, drum_type: e.target.value })}
-                    className="input"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <option value="">Select drum type...</option>
-                    <option value="kick">Kick</option>
-                    <option value="snare">Snare</option>
-                    <option value="hihat">Hihat</option>
-                    <option value="closed hihat">Closed Hihat</option>
-                    <option value="open hihat">Open Hihat</option>
-                    <option value="ride">Ride</option>
-                    <option value="crash">Crash</option>
-                    <option value="tom">Tom</option>
-                    <option value="floor tom">Floor Tom</option>
-                    <option value="rack tom">Rack Tom</option>
-                    <option value="china">China</option>
-                    <option value="splash">Splash</option>
-                    <option value="cowbell">Cowbell</option>
-                    <option value="tambourine">Tambourine</option>
-                    <option value="shaker">Shaker</option>
-                    <option value="clap">Clap</option>
-                    <option value="snap">Snap</option>
-                    <option value="bongo">Bongo</option>
-                    <option value="triangle">Triangle</option>
-                    <option value="woodblock">Woodblock</option>
-                    <option value="cabasa">Cabasa</option>
-                    <option value="fx">FX</option>
-                    <option value="scratch">Scratch</option>
-                    <option value="impact">Impact</option>
-                  </select>
-                </div>
-                <div style={{ zIndex: 1 }}>
-                  <label className="label">Difficulty: {freeTextMetadata.difficulty}</label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={freeTextMetadata.difficulty}
-                    onChange={(e) => setFreeTextMetadata({ ...freeTextMetadata, difficulty: parseInt(e.target.value) })}
-                    className="modern-slider"
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    <span>1 (Easy)</span>
-                    <span>10 (Hard)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Audio Player and Scoring - Side by Side or Loading */}
           {submitting ? (
@@ -432,7 +534,21 @@ export default function TestingPage() {
                   <h3 className="label" style={{ fontSize: '16px', marginBottom: '10px', zIndex: 1 }}>
                     Score the Results
                   </h3>
-                  <ScoringSliders scores={scores} onChange={setScores} />
+                  <ScoringSliders 
+                    scores={scores} 
+                    onChange={(newScores) => {
+                      setScores(newScores);
+                      // Clear errors when user sets scores
+                      if (newScores.audio_quality_score !== null && newScores.audio_quality_score !== undefined) {
+                        setGenerationScoreError(false);
+                      }
+                      if (newScores.llm_accuracy_score !== null && newScores.llm_accuracy_score !== undefined) {
+                        setLlmScoreError(false);
+                      }
+                    }}
+                    generationError={generationScoreError}
+                    llmError={llmScoreError}
+                  />
                 </div>
               </div>
 
@@ -440,7 +556,7 @@ export default function TestingPage() {
               <div style={{ maxWidth: '400px', margin: '0 auto' }}>
                 <button 
                   onClick={submitScoreAndNext} 
-                  disabled={loading}
+                  disabled={loading || submitting}
                   className="btn btn-primary"
                   style={{ width: '100%', justifyContent: 'center', zIndex: 1 }}
                 >
@@ -458,17 +574,17 @@ export default function TestingPage() {
           className="card status-message-fade" 
           style={{ 
             background: status.startsWith('✓') ? 'rgba(52, 211, 153, 0.1)' : 
-                       status.startsWith('Error') ? 'rgba(248, 113, 113, 0.1)' : 
+                       (status.startsWith('Error') || status.startsWith('⚠️')) ? 'rgba(248, 113, 113, 0.15)' : 
                        'var(--secondary-bg)',
             border: status.startsWith('✓') ? '1px solid var(--success-color)' : 
-                    status.startsWith('Error') ? '1px solid var(--error-color)' : 
+                    (status.startsWith('Error') || status.startsWith('⚠️')) ? '1px solid var(--error-color)' : 
                     '1px solid var(--border-color)',
             zIndex: 1
           }}
         >
           <p style={{ 
             color: status.startsWith('✓') ? 'var(--success-color)' : 
-                   status.startsWith('Error') ? 'var(--error-color)' : 
+                   (status.startsWith('Error') || status.startsWith('⚠️')) ? 'var(--error-color)' : 
                    'var(--text-secondary)',
             zIndex: 1
           }}>

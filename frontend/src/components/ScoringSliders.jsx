@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 
-export default function ScoringSliders({ scores, onChange }) {
+export default function ScoringSliders({ scores, onChange, generationError = false, llmError = false }) {
   const genScoreRef = useRef(null);
   const llmScoreRef = useRef(null);
   const [isDragging, setIsDragging] = useState(null); // 'gen' or 'llm' or null
@@ -13,8 +13,9 @@ export default function ScoringSliders({ scores, onChange }) {
       e.preventDefault();
       e.stopPropagation();
       
+      const currentValue = scores.audio_quality_score ?? 1; // Default to 1 if null
       const delta = e.deltaY > 0 ? -1 : 1;
-      const newValue = Math.max(0, Math.min(10, scores.audio_quality_score + delta));
+      const newValue = Math.max(1, Math.min(10, currentValue + delta));
       onChange({ ...scores, audio_quality_score: newValue });
     };
 
@@ -22,8 +23,9 @@ export default function ScoringSliders({ scores, onChange }) {
       e.preventDefault();
       e.stopPropagation();
       
+      const currentValue = scores.llm_accuracy_score ?? 1; // Default to 1 if null
       const delta = e.deltaY > 0 ? -1 : 1;
-      const newValue = Math.max(0, Math.min(10, scores.llm_accuracy_score + delta));
+      const newValue = Math.max(1, Math.min(10, currentValue + delta));
       onChange({ ...scores, llm_accuracy_score: newValue });
     };
 
@@ -48,8 +50,13 @@ export default function ScoringSliders({ scores, onChange }) {
   }, [scores, onChange]);
 
   const handleChange = (key, value) => {
-    // Ensure value is between 0 and 10
-    const numValue = Math.max(0, Math.min(10, Number(value) || 0));
+    // Handle empty string or null
+    if (value === '' || value === null || value === undefined) {
+      onChange({ ...scores, [key]: null });
+      return;
+    }
+    // Ensure value is between 1 and 10
+    const numValue = Math.max(1, Math.min(10, Number(value) || 1));
     onChange({ ...scores, [key]: numValue });
   };
 
@@ -61,7 +68,8 @@ export default function ScoringSliders({ scores, onChange }) {
     
     setIsDragging(key);
     setDragStartY(e.clientY);
-    setDragStartValue(currentValue);
+    // Default to 1 if null for dragging
+    setDragStartValue(currentValue ?? 1);
     e.preventDefault();
   };
 
@@ -80,7 +88,7 @@ export default function ScoringSliders({ scores, onChange }) {
 
       const deltaY = dragStartY - e.clientY; // Inverted: dragging up = increase
       const steps = Math.floor(deltaY / 10); // Every 10px = 1 step
-      const newValue = Math.max(0, Math.min(10, dragStartValue + steps));
+      const newValue = Math.max(1, Math.min(10, dragStartValue + steps));
 
       if (isDragging === 'gen') {
         onChange({ ...scores, audio_quality_score: newValue });
@@ -118,16 +126,24 @@ export default function ScoringSliders({ scores, onChange }) {
           </label>
           <div 
             ref={genScoreRef}
-            className="scroll-wheel-input-compact"
-            onMouseDown={(e) => handleMouseDown(e, 'gen', scores.audio_quality_score)}
+            className={`scroll-wheel-input-compact ${generationError ? 'flash-error-active' : ''}`}
+            onMouseDown={(e) => handleMouseDown(e, 'gen', scores.audio_quality_score ?? 1)}
             onDoubleClick={(e) => handleDoubleClick(e, genScoreRef)}
-            style={{ cursor: isDragging === 'gen' ? 'ns-resize' : 'pointer' }}
+            style={{ 
+              cursor: isDragging === 'gen' ? 'ns-resize' : 'pointer',
+              ...(generationError ? {
+                borderColor: 'var(--secondary-color)',
+                borderWidth: '2px',
+                backgroundColor: 'rgba(199, 155, 255, 0.08)'
+              } : {})
+            }}
           >
             <input
               type="number"
-              min="0"
+              min="1"
               max="10"
-              value={scores.audio_quality_score}
+              value={scores.audio_quality_score ?? ''}
+              placeholder="-"
               onChange={(e) => handleChange('audio_quality_score', e.target.value)}
               className="score-input-compact score-input-drag-mode"
             />
@@ -142,16 +158,24 @@ export default function ScoringSliders({ scores, onChange }) {
           </label>
           <div 
             ref={llmScoreRef}
-            className="scroll-wheel-input-compact"
-            onMouseDown={(e) => handleMouseDown(e, 'llm', scores.llm_accuracy_score)}
+            className={`scroll-wheel-input-compact ${llmError ? 'flash-error-active' : ''}`}
+            onMouseDown={(e) => handleMouseDown(e, 'llm', scores.llm_accuracy_score ?? 1)}
             onDoubleClick={(e) => handleDoubleClick(e, llmScoreRef)}
-            style={{ cursor: isDragging === 'llm' ? 'ns-resize' : 'pointer' }}
+            style={{ 
+              cursor: isDragging === 'llm' ? 'ns-resize' : 'pointer',
+              ...(llmError ? {
+                borderColor: 'var(--secondary-color)',
+                borderWidth: '2px',
+                backgroundColor: 'rgba(199, 155, 255, 0.08)'
+              } : {})
+            }}
           >
             <input
               type="number"
-              min="0"
+              min="1"
               max="10"
-              value={scores.llm_accuracy_score}
+              value={scores.llm_accuracy_score ?? ''}
+              placeholder="-"
               onChange={(e) => handleChange('llm_accuracy_score', e.target.value)}
               className="score-input-compact score-input-drag-mode"
             />
