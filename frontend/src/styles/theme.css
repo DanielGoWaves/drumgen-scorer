@@ -15,6 +15,18 @@
     --focus-outline: rgba(99, 212, 255, 0.25);
 }
 
+@keyframes shimmer {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
 * {
     margin: 0;
     padding: 0;

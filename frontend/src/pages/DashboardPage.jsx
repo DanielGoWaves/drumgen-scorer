@@ -15,7 +15,7 @@ export default function DashboardPage() {
   const prevPathname = useRef(location.pathname);
 
   // All possible versions from the generation website
-  const ALL_VERSIONS = ['v11', 'v12', 'v13'];
+  const ALL_VERSIONS = ['v11', 'v12', 'v13', 'v14'];
 
   useEffect(() => {
     loadDrumTypes();

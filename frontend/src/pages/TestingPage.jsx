@@ -62,6 +62,8 @@ export default function TestingPage() {
   const [freeTextError, setFreeTextError] = useState(false);
   const [generationScoreError, setGenerationScoreError] = useState(false);
   const [llmScoreError, setLlmScoreError] = useState(false);
+  const [showDifficultyTooltip, setShowDifficultyTooltip] = useState(false);
+  const [showIllugenTooltip, setShowIllugenTooltip] = useState(false);
   
   // Edit/Delete prompt state
   const [editMode, setEditMode] = useState(false);
@@ -250,6 +252,34 @@ export default function TestingPage() {
     }
   };
 
+  const loadRandomPrompt = async () => {
+    setStatus('Loading random prompt...');
+    setLoading(true);
+    try {
+      const params = {};
+      if (currentPrompt) {
+        params.exclude_id = currentPrompt.id;
+      }
+      
+      const { data } = await api.get('/api/prompts/random', { params });
+      setCurrentPrompt(data);
+      setLlmJson(null);
+      setLlmResponse(null);
+      setAudioUrl('');
+      setIllugenData(null);
+      setScores({ audio_quality_score: null, llm_accuracy_score: null });
+      resetNotesAndAttachments();
+      setNotesPanelOpen(false);
+      setStatus('');
+      setUserModifiedVersion(false); // Reset user modification flag on new prompt
+      // Model version logic will be handled by the useEffect that watches currentPrompt
+    } catch (err) {
+      setStatus(`Error loading random prompt: ${err?.response?.data?.detail || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendPrompt = async (withIllugen = false) => {
     // Validate free text mode requirements
     if (freeTextMode) {
@@ -329,7 +359,14 @@ export default function TestingPage() {
       setDrumTypeError(false);
       setFreeTextError(false);
     } catch (err) {
-      setStatus(`Error: ${err?.response?.data?.detail || err.message}`);
+      // Handle 502 Bad Gateway errors (upstream service issues) with better messaging
+      if (err?.response?.status === 502) {
+        const detail = err?.response?.data?.detail || 'The DrumGen service is temporarily unavailable.';
+        setStatus(`⚠️ ${detail} Please try again in a moment.`);
+      } else {
+        // Other errors (network, validation, etc.)
+        setStatus(`Error: ${err?.response?.data?.detail || err.message || 'An unexpected error occurred'}`);
+      }
     } finally {
       setLoading(false);
       setIllugenLoading(false);
@@ -727,9 +764,58 @@ export default function TestingPage() {
                 {/* Difficulty */}
                 <div style={{ zIndex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <label className="label" style={{ margin: 0, minWidth: '85px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', textAlign: 'right' }}>
-                      Difficulty:
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '85px', justifyContent: 'flex-end' }}>
+                      <label className="label" style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', textAlign: 'right' }}>
+                        Difficulty:
+                      </label>
+                      <div 
+                        style={{ 
+                          position: 'relative',
+                          cursor: 'pointer',
+                          zIndex: 1100
+                        }}
+                        onMouseEnter={() => setShowDifficultyTooltip(true)}
+                        onMouseLeave={() => setShowDifficultyTooltip(false)}
+                      >
+                        <span style={{ 
+                          fontSize: '12px', 
+                          color: 'var(--primary-color)',
+                          border: '1px solid var(--primary-color)',
+                          borderRadius: '50%',
+                          width: '16px',
+                          height: '16px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'var(--primary-bg)',
+                          fontWeight: '600'
+                        }}>i</span>
+                        {showDifficultyTooltip && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '0',
+                            right: '120%',
+                            background: 'var(--secondary-bg)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            width: '240px',
+                            boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+                            fontSize: '12px',
+                            lineHeight: '1.5',
+                            zIndex: 3000,
+                            whiteSpace: 'normal'
+                          }}>
+                            <div style={{ fontWeight: '600', marginBottom: '6px', color: 'var(--primary-color)' }}>
+                              Difficulty Rating
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)' }}>
+                              Set how difficult you believe this prompt is for the model to generate. This helps weight the scoring appropriately.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div style={{ flex: 1 }}>
                       <DifficultySlider 
                         value={freeTextMetadata.difficulty}
@@ -838,8 +924,51 @@ export default function TestingPage() {
                   fontSize: '16px',
                   lineHeight: '1.6',
                   border: '1px solid var(--border-color)',
-                  zIndex: 1
+                  zIndex: 1,
+                  position: 'relative'
                 }}>
+                  {/* Random button in top right corner of prompt text area */}
+                  <button
+                    onClick={(e) => {
+                      if (!loading && !editMode) {
+                        e.currentTarget.style.transform = 'scale(0.95) rotate(-15deg)';
+                        setTimeout(() => {
+                          e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+                        }, 150);
+                        loadRandomPrompt();
+                      }
+                    }}
+                    disabled={loading || editMode}
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      zIndex: 2,
+                      fontSize: '20px',
+                      padding: '6px 8px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: loading || editMode ? 'not-allowed' : 'pointer',
+                      opacity: loading || editMode ? 0.4 : 1,
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: '36px',
+                      minHeight: '36px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loading && !editMode) {
+                        e.currentTarget.style.transform = 'scale(1.1) rotate(15deg)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+                    }}
+                    title="Load a random prompt from the database"
+                  >
+                    🎲
+                  </button>
                   {currentPrompt.text}
                 </div>
               )}
@@ -851,15 +980,24 @@ export default function TestingPage() {
           <button 
             onClick={() => sendPrompt(false)} 
             disabled={loading || illugenLoading || (!freeTextMode && !currentPrompt)}
-            className="btn btn-secondary"
-            style={{ width: '50%', justifyContent: 'center', zIndex: 1 }}
+            className="btn"
+            style={{ 
+              width: '50%', 
+              justifyContent: 'center', 
+              zIndex: 1,
+              background: 'linear-gradient(135deg, #4c1d95 0%, #6b46c1 100%)',
+              borderColor: '#6b46c1',
+              color: '#fff',
+              fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(107, 70, 193, 0.3)'
+            }}
           >
-            {loading && !illugenLoading ? '⏳ Generating...' : 'Generate'}
+            {loading && !illugenLoading ? '⏳ Generating...' : 'DrumGen'}
           </button>
           <button 
             onClick={() => sendPrompt(true)} 
             disabled={loading || illugenLoading || (!freeTextMode && !currentPrompt)}
-            className="btn btn-primary"
+            className="btn"
             style={{ 
               width: '50%', 
               justifyContent: 'center', 
@@ -867,9 +1005,16 @@ export default function TestingPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              background: 'linear-gradient(90deg, #8247ff, #54d0ff)',
+              background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+              backgroundSize: '300% 300%',
+              borderColor: 'transparent',
+              color: '#fff',
+              fontWeight: '600',
               boxShadow: illugenLoading ? '0 0 0 4px rgba(130,71,255,0.15)' : '0 10px 30px rgba(130,71,255,0.25)',
-              transition: 'transform 120ms ease, box-shadow 120ms ease'
+              transition: 'transform 120ms ease, box-shadow 120ms ease',
+              animation: 'shimmer 3s ease-in-out infinite',
+              position: 'relative',
+              overflow: 'visible'
             }}
           >
             <img 
@@ -877,7 +1022,84 @@ export default function TestingPage() {
               alt="Illugen" 
               style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'drop-shadow(0 0 6px rgba(84,208,255,0.5))' }} 
             />
-            {illugenLoading ? '⏳ Generating + Illugen...' : 'Generate + Illugen'}
+            {illugenLoading ? '⏳ Generating...' : 'DrumGen + Illugen'}
+            <div 
+              style={{ 
+                position: 'relative',
+                cursor: 'pointer',
+                zIndex: 1100,
+                marginLeft: '4px'
+              }}
+              onMouseEnter={() => setShowIllugenTooltip(true)}
+              onMouseLeave={() => setShowIllugenTooltip(false)}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span style={{ 
+                fontSize: '11px', 
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.5)',
+                borderRadius: '50%',
+                width: '14px',
+                height: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.2)',
+                fontWeight: '700',
+                lineHeight: '1',
+                flexShrink: 0
+              }}>i</span>
+              {showIllugenTooltip && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  marginBottom: '8px',
+                  background: 'var(--secondary-bg)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  width: '260px',
+                  boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+                  fontSize: '12px',
+                  lineHeight: '1.5',
+                  zIndex: 3000,
+                  whiteSpace: 'normal',
+                  pointerEvents: 'none'
+                }}>
+                  <div style={{ fontWeight: '600', marginBottom: '6px', color: 'var(--primary-color)' }}>
+                    Compare DrumGen & Illugen
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    This allows you to compare DrumGen to Illugen when scoring.
+                  </div>
+                  {/* Arrow pointing down */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-6px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '0',
+                    height: '0',
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderTop: '6px solid var(--border-color)'
+                  }}></div>
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-5px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '0',
+                    height: '0',
+                    borderLeft: '5px solid transparent',
+                    borderRight: '5px solid transparent',
+                    borderTop: '5px solid var(--secondary-bg)'
+                  }}></div>
+                </div>
+              )}
+            </div>
           </button>
         </div>
       </div>

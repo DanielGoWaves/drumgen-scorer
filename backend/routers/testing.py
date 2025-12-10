@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -91,7 +92,22 @@ async def send_prompt(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide prompt_id or text.")
 
     # Step 1: process text to JSON controls
-    llm_data = await client.process_text(prompt_text, payload.model_version)
+    try:
+        llm_data = await client.process_text(prompt_text, payload.model_version)
+    except httpx.HTTPStatusError as e:
+        error_msg = f"DrumGen service error during text processing: {e.response.status_code} {e.response.reason_phrase}"
+        if e.response.status_code == 500:
+            error_msg = "The DrumGen service is temporarily unavailable (internal server error). Please try again in a moment."
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=error_msg
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Unable to connect to DrumGen service: {str(e)}"
+        ) from e
+    
     if not llm_data.get("success"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"LLM error: {llm_data.get('error')}")
     controls = llm_data.get("controls") or {}
@@ -112,7 +128,22 @@ async def send_prompt(
         "generation_mode": payload.generation_mode,
         "model_version": payload.model_version,
     }
-    gen_data = await client.generate_audio(gen_payload)
+    try:
+        gen_data = await client.generate_audio(gen_payload)
+    except httpx.HTTPStatusError as e:
+        error_msg = f"DrumGen service error during audio generation: {e.response.status_code} {e.response.reason_phrase}"
+        if e.response.status_code == 500:
+            error_msg = "The DrumGen service is temporarily unavailable (internal server error). Please try again in a moment."
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=error_msg
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Unable to connect to DrumGen service: {str(e)}"
+        ) from e
+    
     if not gen_data.get("success"):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Generate error: {gen_data.get('error')}")
 
@@ -121,7 +152,21 @@ async def send_prompt(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Missing audio_id in response.")
 
     # Download and save audio file locally
-    audio_content = await client.fetch_audio(audio_id)
+    try:
+        audio_content = await client.fetch_audio(audio_id)
+    except httpx.HTTPStatusError as e:
+        error_msg = f"DrumGen service error during audio download: {e.response.status_code} {e.response.reason_phrase}"
+        if e.response.status_code == 500:
+            error_msg = "The DrumGen service is temporarily unavailable (internal server error). Please try again in a moment."
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=error_msg
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Unable to connect to DrumGen service: {str(e)}"
+        ) from e
     audio_filename = f"{audio_id}.wav"
     audio_file_path = AUDIO_DIR / audio_filename
     

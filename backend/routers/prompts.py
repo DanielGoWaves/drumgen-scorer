@@ -181,6 +181,39 @@ async def get_next_prompt_in_rotation(
     return PromptRead.model_validate(prompt)
 
 
+@router.get("/random", response_model=PromptRead, summary="Get a random prompt")
+async def get_random_prompt(
+    exclude_id: Optional[int] = None,
+    session: AsyncSession = Depends(get_session)
+) -> PromptRead:
+    """
+    Get a truly random prompt from the entire pool.
+    Ignores rotation logic and used_count - purely random selection.
+    Only returns non-user-generated prompts.
+    """
+    stmt = select(Prompt).where(Prompt.is_user_generated == False)
+    
+    if exclude_id is not None:
+        stmt = stmt.where(Prompt.id != exclude_id)
+    
+    # Get total count for random selection
+    count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+    total_count = count_result.scalar() or 0
+    
+    if total_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No prompts available")
+    
+    # Get a random prompt using OFFSET with random order
+    stmt = stmt.order_by(func.random()).limit(1)
+    result = await session.execute(stmt)
+    prompt = result.scalar_one_or_none()
+    
+    if not prompt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No prompts available")
+    
+    return PromptRead.model_validate(prompt)
+
+
 @router.get("/{prompt_id}", response_model=PromptRead, summary="Get prompt by id")
 async def get_prompt(prompt_id: int, session: AsyncSession = Depends(get_session)) -> PromptRead:
     result = await session.execute(select(Prompt).where(Prompt.id == prompt_id))
