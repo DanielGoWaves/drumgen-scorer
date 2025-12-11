@@ -735,7 +735,7 @@ export default function TestingPage() {
   return (
     <div className="grid" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       {/* Mode Toggle & Model Selection */}
-      <div className="card" style={{ zIndex: 1 }}>
+      <div className="card" style={{ zIndex: 1, overflow: 'visible' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '600', zIndex: 1 }}>Testing Mode</h2>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', zIndex: 1 }}>
@@ -902,7 +902,7 @@ export default function TestingPage() {
                         style={{ 
                           position: 'relative',
                           cursor: 'pointer',
-                          zIndex: 10000
+                          zIndex: 1100
                         }}
                         onMouseEnter={() => setShowDifficultyTooltip(true)}
                         onMouseLeave={() => setShowDifficultyTooltip(false)}
@@ -933,9 +933,8 @@ export default function TestingPage() {
                             boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
                             fontSize: '12px',
                             lineHeight: '1.5',
-                            zIndex: 10001,
-                            whiteSpace: 'normal',
-                            pointerEvents: 'auto'
+                            zIndex: 3000,
+                            whiteSpace: 'normal'
                           }}>
                             <div style={{ fontWeight: '600', marginBottom: '6px', color: 'var(--primary-color)' }}>
                               Difficulty Rating
