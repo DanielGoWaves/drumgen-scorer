@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import TestingPage from './pages/TestingPage';
 import DashboardPage from './pages/DashboardPage';
 import ResultsPage from './pages/ResultsPage';
 import PromptsPage from './pages/PromptsPage';
+import LoadingOverlay from './components/LoadingOverlay';
 import './styles/theme.css';
 
-const Layout = ({ children }) => {
+const Layout = ({ children, setOverlayLoading, overlayLoading }) => {
   const location = useLocation();
   
   return (
@@ -42,20 +43,24 @@ const Layout = ({ children }) => {
           </Link>
         </nav>
       </div>
+      {/* Full-screen overlay for page-level loading (results/prompts) */}
+      <LoadingOverlay key={location.pathname} isLoading={overlayLoading} />
       <main>{children}</main>
     </div>
   );
 };
 
 export default function App() {
+  const [overlayLoading, setOverlayLoading] = useState(false);
+
   return (
     <Router>
-      <Layout>
+      <Layout overlayLoading={overlayLoading} setOverlayLoading={setOverlayLoading}>
         <Routes>
-          <Route path="/test" element={<TestingPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/results" element={<ResultsPage />} />
-          <Route path="/prompts" element={<PromptsPage />} />
+          <Route path="/test" element={<TestingPage setOverlayLoading={setOverlayLoading} />} />
+          <Route path="/dashboard" element={<DashboardPage setOverlayLoading={setOverlayLoading} />} />
+          <Route path="/results" element={<ResultsPage setOverlayLoading={setOverlayLoading} />} />
+          <Route path="/prompts" element={<PromptsPage setOverlayLoading={setOverlayLoading} />} />
           <Route path="*" element={<Navigate to="/test" replace />} />
         </Routes>
       </Layout>
