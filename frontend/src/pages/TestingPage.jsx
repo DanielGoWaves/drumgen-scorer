@@ -902,7 +902,7 @@ export default function TestingPage() {
                         style={{ 
                           position: 'relative',
                           cursor: 'pointer',
-                          zIndex: 1100
+                          zIndex: 10000
                         }}
                         onMouseEnter={() => setShowDifficultyTooltip(true)}
                         onMouseLeave={() => setShowDifficultyTooltip(false)}
@@ -933,8 +933,9 @@ export default function TestingPage() {
                             boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
                             fontSize: '12px',
                             lineHeight: '1.5',
-                            zIndex: 3000,
-                            whiteSpace: 'normal'
+                            zIndex: 10001,
+                            whiteSpace: 'normal',
+                            pointerEvents: 'auto'
                           }}>
                             <div style={{ fontWeight: '600', marginBottom: '6px', color: 'var(--primary-color)' }}>
                               Difficulty Rating
