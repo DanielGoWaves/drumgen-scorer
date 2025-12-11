@@ -355,10 +355,10 @@ async def delete_result(
         has_illugen,
         result.notes_audio_path,
     )
-
+    
     await session.delete(result)
     await session.commit()
-
+    
     # Clean up audio file if it's no longer linked to any result
     if audio_id:
         removed = await cleanup_orphaned_audio_file(audio_id, session)
