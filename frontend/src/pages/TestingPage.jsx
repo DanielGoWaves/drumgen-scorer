@@ -71,6 +71,49 @@ export default function TestingPage() {
   const [editedPromptText, setEditedPromptText] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [promptWasEdited, setPromptWasEdited] = useState(false);
+  
+  const resetTestingForm = () => {
+    [
+      'testingPage_llmJson',
+      'testingPage_llmResponse',
+      'testingPage_audioUrl',
+      'testingPage_illugenData',
+      'testingPage_scores',
+      'testingPage_notes',
+      'testingPage_noteAttachments',
+      'testingPage_freeText',
+      'testingPage_freeTextMetadata',
+    ].forEach((key) => sessionStorage.removeItem(key));
+
+    setStatus('');
+    setScores({ audio_quality_score: null, llm_accuracy_score: null });
+    setNotes('');
+    setNotesPanelOpen(false);
+    setNoteAudioFile(null);
+    setNoteAudioPath('');
+    setNoteAttachments([]);
+    setNoteDragActive(false);
+    setIllugenData(null);
+    setAudioUrl('');
+    setLlmJson(null);
+    setLlmResponse(null);
+    setWasGenerating(false);
+    setSubmitting(false);
+    setIllugenLoading(false);
+    setPromptWasEdited(false);
+    setGenerationScoreError(false);
+    setLlmScoreError(false);
+    setDifficultyError(false);
+    setDrumTypeError(false);
+    setFreeTextError(false);
+    if (noteFileInputRef.current) {
+      noteFileInputRef.current.value = '';
+    }
+    if (freeTextMode) {
+      setFreeText('');
+      setFreeTextMetadata({ drum_type: '', difficulty: null });
+    }
+  };
 
   // Save state to sessionStorage whenever it changes
   useEffect(() => {
@@ -695,9 +738,19 @@ export default function TestingPage() {
       <div className="card" style={{ zIndex: 1 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}>
           <h2 style={{ fontSize: '20px', fontWeight: '600', zIndex: 1 }}>Testing Mode</h2>
-          <button onClick={toggleMode} className="btn btn-secondary" style={{ zIndex: 1 }}>
-            {freeTextMode ? '← Database Mode' : '✏️ Free Text Mode'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', zIndex: 1 }}>
+            <button
+              onClick={resetTestingForm}
+              className="btn btn-secondary"
+              style={{ zIndex: 1, background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}
+              title="Reset form fields and attachments"
+            >
+              Reset
+            </button>
+            <button onClick={toggleMode} className="btn btn-secondary" style={{ zIndex: 1 }}>
+              {freeTextMode ? '← Database Mode' : '✏️ Free Text Mode'}
+            </button>
+          </div>
         </div>
         <div style={{ zIndex: 1 }}>
           <label className="label">Model Version:</label>

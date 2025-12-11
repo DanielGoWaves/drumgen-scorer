@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import api, { API_BASE_URL } from '../services/api';
 import AudioPlayer from '../components/AudioPlayer';
+import LoadingOverlay from '../components/LoadingOverlay';
 
-export default function ResultsPage({ setOverlayLoading }) {
+export default function ResultsPage() {
   const location = useLocation();
   const [results, setResults] = useState([]);
   const [prompts, setPrompts] = useState({});
@@ -28,8 +29,6 @@ export default function ResultsPage({ setOverlayLoading }) {
   const [sortColumn, setSortColumn] = useState('tested_at');
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
   
-  const initialLoad = useRef(false);
-  
   // Update filters when navigating to results page with state (e.g., clicking from dashboard)
   // Use location.key to detect navigation changes even when pathname stays the same
   useEffect(() => {
@@ -43,22 +42,15 @@ export default function ResultsPage({ setOverlayLoading }) {
     }
   }, [location.key, location.state]);
   
-  // Initial load with overlay
+  // Load results when filters change
   useEffect(() => {
-    const run = async () => {
-      setOverlayLoading?.(true);
-      await Promise.all([loadResults(), loadDrumTypes()]);
-      setOverlayLoading?.(false);
-      initialLoad.current = true;
-    };
-    run();
-  }, []);
-
-  // Load results when filters change (after initial load)
-  useEffect(() => {
-    if (!initialLoad.current) return;
     loadResults();
   }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
+  
+  // Load drum types once on mount
+  useEffect(() => {
+    loadDrumTypes();
+  }, []);
 
   const handleNoteFileSelect = (file) => {
     if (!file) return;
@@ -277,22 +269,83 @@ export default function ResultsPage({ setOverlayLoading }) {
     return new Date(dateStr).toLocaleString();
   };
 
-  if (loading && results.length === 0) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
-        <p className="text-secondary">Loading results...</p>
-      </div>
-    );
-  }
+  // Check if any filters are active (not default)
+  const hasActiveFilters = () => {
+    return drumTypeFilter !== 'all' || 
+           difficultyFilter !== 'all' || 
+           versionFilter !== 'all' || 
+           audioScoreFilter !== 'all' || 
+           hasNotesFilter;
+  };
+
+  // Reset all filters to default
+  const resetFilters = () => {
+    setDrumTypeFilter('all');
+    setDifficultyFilter('all');
+    setVersionFilter('all');
+    setAudioScoreFilter('all');
+    setHasNotesFilter(false);
+  };
 
   return (
     <div className="grid" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <LoadingOverlay isLoading={loading} />
       <h2 style={{ fontSize: '24px', fontWeight: '700' }}>Test Results</h2>
 
       {/* Filters */}
       <div className="card" style={{ zIndex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Filters</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Filters</h3>
+            <button
+              onClick={resetFilters}
+              disabled={!hasActiveFilters()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                background: hasActiveFilters() ? 'var(--secondary-bg)' : 'transparent',
+                border: `1px solid ${hasActiveFilters() ? 'var(--border-color)' : 'transparent'}`,
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: hasActiveFilters() ? 'var(--primary-color)' : 'var(--text-secondary)',
+                cursor: hasActiveFilters() ? 'pointer' : 'not-allowed',
+                opacity: hasActiveFilters() ? 1 : 0.4,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                if (hasActiveFilters()) {
+                  e.target.style.borderColor = 'var(--primary-color)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (hasActiveFilters()) {
+                  e.target.style.borderColor = 'var(--border-color)';
+                }
+              }}
+              title={hasActiveFilters() ? 'Reset all filters' : 'No filters active'}
+            >
+              <svg 
+                width="14" 
+                height="14" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2.5" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+                style={{
+                  transform: hasActiveFilters() ? 'none' : 'rotate(0deg)',
+                  transition: 'transform 0.3s'
+                }}
+              >
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+              </svg>
+              Reset
+            </button>
+          </div>
           <div style={{ 
             padding: '6px 16px', 
             background: 'var(--secondary-bg)', 
@@ -344,7 +397,7 @@ export default function ResultsPage({ setOverlayLoading }) {
             </select>
           </div>
           <div>
-            <label className="label">Has Notes</label>
+            <label className="label">Notes/Attachments</label>
             <label 
               htmlFor="hasNotesFilter"
               style={{ 
