@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
-export default function DashboardPage() {
+export default function DashboardPage({ setOverlayLoading }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [analytics, setAnalytics] = useState(null);
@@ -20,8 +20,12 @@ export default function DashboardPage() {
   const ALL_VERSIONS = ['v11', 'v12', 'v13', 'v14'];
 
   useEffect(() => {
-    loadDrumTypes();
-    loadAnalytics();
+    const run = async () => {
+      setOverlayLoading?.(true);
+      await Promise.all([loadDrumTypes(), loadAnalytics()]);
+      setOverlayLoading?.(false);
+    };
+    run();
   }, []);
 
   // Refresh analytics when navigating to dashboard from another page
@@ -618,9 +622,12 @@ export default function DashboardPage() {
                 <div style={{ position: 'relative', width: '100%', maxWidth: '320px', margin: '0 auto' }}>
                   <svg viewBox="-160 -160 320 320" style={{ width: '100%', height: 'auto' }}>
                     {getDifficultyPieData().map((slice, idx, arr) => {
+                      const totalSlices = arr.length || 1;
+                      const percentageNum = parseFloat(slice.percentage) || 0;
                       // Start from 12 o'clock (0 degrees) and go clockwise
-                      const startAngle = arr.slice(0, idx).reduce((sum, s) => sum + (s.percentage / 100 * 360), 0);
-                      const endAngle = startAngle + (slice.percentage / 100 * 360);
+                      const startAngle = arr.slice(0, idx).reduce((sum, s) => sum + ((parseFloat(s.percentage) || 0) / 100 * 360), 0);
+                      const sweep = totalSlices === 1 ? 359.999 : (percentageNum / 100 * 360);
+                      const endAngle = startAngle + sweep;
                       const isHovered = hoveredPieSegment?.type === 'difficulty' && hoveredPieSegment?.value === slice.difficulty;
                       const outerRadius = isHovered ? 148 : 145;
                       const innerRadius = 85;
@@ -714,9 +721,12 @@ export default function DashboardPage() {
                 <div style={{ position: 'relative', width: '100%', maxWidth: '320px', margin: '0 auto' }}>
                   <svg viewBox="-160 -160 320 320" style={{ width: '100%', height: 'auto' }}>
                     {getScorePieData().map((slice, idx, arr) => {
+                      const totalSlices = arr.length || 1;
+                      const percentageNum = parseFloat(slice.percentage) || 0;
                       // Start from 12 o'clock (0 degrees) and go clockwise
-                      const startAngle = arr.slice(0, idx).reduce((sum, s) => sum + (s.percentage / 100 * 360), 0);
-                      const endAngle = startAngle + (slice.percentage / 100 * 360);
+                      const startAngle = arr.slice(0, idx).reduce((sum, s) => sum + ((parseFloat(s.percentage) || 0) / 100 * 360), 0);
+                      const sweep = totalSlices === 1 ? 359.999 : (percentageNum / 100 * 360);
+                      const endAngle = startAngle + sweep;
                       const isHovered = hoveredPieSegment?.type === 'score' && hoveredPieSegment?.value === slice.score;
                       const outerRadius = isHovered ? 148 : 145;
                       const innerRadius = 85;
