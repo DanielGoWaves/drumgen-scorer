@@ -100,5 +100,5 @@ async def cleanup_all_orphaned_audio(session: AsyncSession) -> int:
         )
     else:
         logger.info("No orphaned audio files to delete")
-
+    
     return deleted_count

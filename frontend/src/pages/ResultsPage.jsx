@@ -29,7 +29,7 @@ export default function ResultsPage({ setOverlayLoading }) {
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
   
   const initialLoad = useRef(false);
-
+  
   // Update filters when navigating to results page with state (e.g., clicking from dashboard)
   // Use location.key to detect navigation changes even when pathname stays the same
   useEffect(() => {
