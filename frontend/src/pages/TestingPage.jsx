@@ -48,6 +48,7 @@ export default function TestingPage() {
   const [loading, setLoading] = useState(false);
   const [illugenLoading, setIllugenLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [wasGenerating, setWasGenerating] = useState(false);
   const [freeTextMode, setFreeTextMode] = useState(() => getInitialState('freeTextMode', false));
   const [freeText, setFreeText] = useState(() => getInitialState('freeText', ''));
   const [modelVersion, setModelVersion] = useState(() => getInitialState('modelVersion', 'v12'));
@@ -115,6 +116,17 @@ export default function TestingPage() {
   useEffect(() => {
     sessionStorage.setItem('testingPage_notes', JSON.stringify(notes));
   }, [notes]);
+
+  // Track when generation completes for letter drop animation
+  useEffect(() => {
+    if (loading || illugenLoading) {
+      setWasGenerating(true);
+    } else if (wasGenerating) {
+      // Letters will drop, then after animation completes, reset the flag
+      const timer = setTimeout(() => setWasGenerating(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, illugenLoading, wasGenerating]);
   
   useEffect(() => {
     sessionStorage.setItem('testingPage_noteAttachments', JSON.stringify(noteAttachments));
@@ -730,33 +742,98 @@ export default function TestingPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '32px', alignItems: 'start' }}>
               {/* Left: Prompt Input - Wider */}
               <div>
-                <label className="label" style={{ marginBottom: '8px', display: 'block' }}>Enter your prompt:</label>
-                <textarea
-                  value={freeText}
-                  onChange={(e) => {
-                    setFreeText(e.target.value);
-                    setFreeTextError(false);
-                  }}
-                  placeholder={modelVersion === 'v14' 
-                    ? "Describe the electric drum sound you want... (e.g., 'punchy 808 kick with reverb', 'crispy snare with vintage character'). Use v14 for electric drums."
-                    : modelVersion === 'v13'
-                    ? "Describe the cymbal sound you want... (Tip: Use V13 for cymbals)"
-                    : "Describe the drum sound you want... (Tip: Switch to V13 for cymbals, V14 for electric drums)"}
-                  rows={6}
-                  className={`input ${freeTextError ? 'flash-error-active' : ''}`}
-                  style={{ 
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
+                <label className="label" style={{ marginBottom: '8px', display: 'block' }}>
+                  {(loading || illugenLoading) ? 'Your prompt:' : 'Enter your prompt:'}
+                </label>
+                {(loading || illugenLoading || wasGenerating) ? (
+                  <div style={{ 
+                    padding: '16px', 
+                    background: 'var(--secondary-bg)', 
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    lineHeight: '1.6',
+                    border: '1px solid var(--border-color)',
                     zIndex: 1,
-                    width: '100%',
-                    minHeight: '140px',
-                    ...(freeTextError ? {
-                      borderColor: 'var(--secondary-color)',
-                      borderWidth: '2px',
-                      backgroundColor: 'rgba(199, 155, 255, 0.08)'
-                    } : {})
-                  }}
-                />
+                    minHeight: '60px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    paddingTop: '16px'
+                  }}>
+                    {(loading || illugenLoading) && freeText ? (
+                      <span>
+                        {freeText.split('').map((char, index) => (
+                          <span
+                            key={index}
+                            style={{
+                              display: 'inline-block',
+                              animation: `floatUp 3s ease-in-out infinite`,
+                              animationDelay: `${index * 0.05}s`,
+                              whiteSpace: char === ' ' ? 'pre' : 'normal',
+                              ...(illugenLoading ? {
+                                background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                                backgroundSize: '300% 300%',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                animation: `floatUp 3s ease-in-out infinite, shimmer 3s ease-in-out infinite`,
+                                animationDelay: `${index * 0.05}s, 0s`
+                              } : {})
+                            }}
+                          >
+                            {char}
+                          </span>
+                        ))}
+                      </span>
+                    ) : wasGenerating && freeText ? (
+                      <span>
+                        {freeText.split('').map((char, index) => (
+                          <span
+                            key={index}
+                            style={{
+                              display: 'inline-block',
+                              animation: `dropDown 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)`,
+                              animationDelay: `${index * 0.02}s`,
+                              animationFillMode: 'backwards',
+                              whiteSpace: char === ' ' ? 'pre' : 'normal'
+                            }}
+                          >
+                            {char}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : (
+                  <textarea
+                    value={freeText}
+                    onChange={(e) => {
+                      setFreeText(e.target.value);
+                      setFreeTextError(false);
+                    }}
+                    placeholder={modelVersion === 'v14' 
+                      ? "Describe the electric drum sound you want... (e.g., 'punchy 808 kick with reverb', 'crispy snare with vintage character'). Use v14 for electric drums."
+                      : modelVersion === 'v13'
+                      ? "Describe the cymbal sound you want... (Tip: Use V13 for cymbals)"
+                      : "Describe the drum sound you want... (Tip: Switch to V13 for cymbals, V14 for electric drums)"}
+                    rows={2}
+                    className={`input ${freeTextError ? 'flash-error-active' : ''}`}
+                    style={{ 
+                      fontFamily: 'inherit',
+                      fontSize: '16px',
+                      lineHeight: '1.6',
+                      resize: 'vertical',
+                      zIndex: 1,
+                      width: '100%',
+                      minHeight: '60px',
+                      padding: '16px',
+                      ...(freeTextError ? {
+                        borderColor: 'var(--secondary-color)',
+                        borderWidth: '2px',
+                        backgroundColor: 'rgba(199, 155, 255, 0.08)'
+                      } : {})
+                    }}
+                  />
+                )}
               </div>
               
               {/* Right: Difficulty Only */}
@@ -969,7 +1046,51 @@ export default function TestingPage() {
                   >
                     🎲
                   </button>
-                  {currentPrompt.text}
+                  {(loading || illugenLoading) && currentPrompt?.text ? (
+                    <span>
+                      {currentPrompt.text.split('').map((char, index) => (
+                        <span
+                          key={index}
+                          style={{
+                            display: 'inline-block',
+                            animation: `floatUp 3s ease-in-out infinite`,
+                            animationDelay: `${index * 0.05}s`,
+                            whiteSpace: char === ' ' ? 'pre' : 'normal',
+                            ...(illugenLoading ? {
+                              background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                              backgroundSize: '300% 300%',
+                              backgroundClip: 'text',
+                              WebkitBackgroundClip: 'text',
+                              WebkitTextFillColor: 'transparent',
+                              animation: `floatUp 3s ease-in-out infinite, shimmer 3s ease-in-out infinite`,
+                              animationDelay: `${index * 0.05}s, 0s`
+                            } : {})
+                          }}
+                        >
+                          {char}
+                        </span>
+                      ))}
+                    </span>
+                  ) : wasGenerating && currentPrompt?.text ? (
+                    <span>
+                      {currentPrompt.text.split('').map((char, index) => (
+                        <span
+                          key={index}
+                          style={{
+                            display: 'inline-block',
+                            animation: `dropDown 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)`,
+                            animationDelay: `${index * 0.02}s`,
+                            animationFillMode: 'backwards',
+                            whiteSpace: char === ' ' ? 'pre' : 'normal'
+                          }}
+                        >
+                          {char}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    currentPrompt?.text || ''
+                  )}
                 </div>
               )}
             </div>
@@ -985,11 +1106,35 @@ export default function TestingPage() {
               width: '50%', 
               justifyContent: 'center', 
               zIndex: 1,
-              background: 'linear-gradient(135deg, #4c1d95 0%, #6b46c1 100%)',
-              borderColor: '#6b46c1',
+              background: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
+              borderColor: '#8b5cf6',
               color: '#fff',
               fontWeight: '600',
-              boxShadow: '0 4px 12px rgba(107, 70, 193, 0.3)'
+              boxShadow: loading && !illugenLoading ? '0 0 0 4px rgba(124,58,237,0.2)' : '0 4px 16px rgba(124, 58, 237, 0.4)',
+              transition: 'all 150ms ease',
+              transform: loading && !illugenLoading ? 'scale(0.98)' : 'scale(1)'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading && !illugenLoading && (freeTextMode || currentPrompt)) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(124, 58, 237, 0.45)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading && !illugenLoading) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(124, 58, 237, 0.4)';
+              }
+            }}
+            onMouseDown={(e) => {
+              if (!loading && !illugenLoading && (freeTextMode || currentPrompt)) {
+                e.currentTarget.style.transform = 'translateY(0)';
+              }
+            }}
+            onMouseUp={(e) => {
+              if (!loading && !illugenLoading && (freeTextMode || currentPrompt)) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }
             }}
           >
             {loading && !illugenLoading ? '⏳ Generating...' : 'DrumGen'}
@@ -1005,30 +1150,75 @@ export default function TestingPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
-              backgroundSize: '300% 300%',
-              borderColor: 'transparent',
+              background: 'linear-gradient(135deg, #5b21b6 0%, #6366f1 100%)',
+              borderColor: '#6366f1',
               color: '#fff',
               fontWeight: '600',
-              boxShadow: illugenLoading ? '0 0 0 4px rgba(130,71,255,0.15)' : '0 10px 30px rgba(130,71,255,0.25)',
-              transition: 'transform 120ms ease, box-shadow 120ms ease',
-              animation: 'shimmer 3s ease-in-out infinite',
+              boxShadow: illugenLoading ? '0 0 0 4px rgba(99,102,241,0.2)' : '0 4px 16px rgba(99, 102, 241, 0.4)',
+              transition: 'all 150ms ease',
               position: 'relative',
-              overflow: 'visible'
+              overflow: 'visible',
+              transform: illugenLoading ? 'scale(0.98)' : 'scale(1)'
+            }}
+            onMouseEnter={(e) => {
+              if (!loading && !illugenLoading && (freeTextMode || currentPrompt)) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(99, 102, 241, 0.45)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading && !illugenLoading) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(99, 102, 241, 0.4)';
+              }
+            }}
+            onMouseDown={(e) => {
+              if (!loading && !illugenLoading && (freeTextMode || currentPrompt)) {
+                e.currentTarget.style.transform = 'translateY(0)';
+              }
+            }}
+            onMouseUp={(e) => {
+              if (!loading && !illugenLoading && (freeTextMode || currentPrompt)) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }
             }}
           >
-            <img 
-              src="/illugen-icon.icns" 
-              alt="Illugen" 
-              style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'drop-shadow(0 0 6px rgba(84,208,255,0.5))' }} 
-            />
-            {illugenLoading ? '⏳ Generating...' : 'DrumGen + Illugen'}
+            {illugenLoading ? (
+              '⏳ Generating...'
+            ) : (
+              <>
+                <span>DrumGen + </span>
+                <span style={{
+                  background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                  backgroundSize: '300% 300%',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  animation: 'shimmer 3s ease-in-out infinite',
+                  fontWeight: '600'
+                }}>
+                  Illugen
+                </span>
+                <img 
+                  src="/illugen-icon.icns" 
+                  alt="Illugen" 
+                  style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    objectFit: 'contain', 
+                    filter: 'drop-shadow(0 0 6px rgba(84,208,255,0.5))' 
+                  }} 
+                />
+              </>
+            )}
             <div 
               style={{ 
-                position: 'relative',
+                position: 'absolute',
+                right: '8px',
                 cursor: 'pointer',
                 zIndex: 1100,
-                marginLeft: '4px'
+                display: 'flex',
+                alignItems: 'center'
               }}
               onMouseEnter={() => setShowIllugenTooltip(true)}
               onMouseLeave={() => setShowIllugenTooltip(false)}
@@ -1053,8 +1243,7 @@ export default function TestingPage() {
                 <div style={{
                   position: 'absolute',
                   bottom: '100%',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
+                  right: '0',
                   marginBottom: '8px',
                   background: 'var(--secondary-bg)',
                   border: '1px solid var(--border-color)',
@@ -1078,8 +1267,7 @@ export default function TestingPage() {
                   <div style={{
                     position: 'absolute',
                     bottom: '-6px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    right: '7px',
                     width: '0',
                     height: '0',
                     borderLeft: '6px solid transparent',
@@ -1089,8 +1277,7 @@ export default function TestingPage() {
                   <div style={{
                     position: 'absolute',
                     bottom: '-5px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    right: '8px',
                     width: '0',
                     height: '0',
                     borderLeft: '5px solid transparent',
@@ -1118,9 +1305,126 @@ export default function TestingPage() {
 
           {/* Audio Player and Scoring - Different layouts for Illugen vs regular */}
           {submitting ? (
-            <div className="submission-loading-container">
-              <div className="submission-loading-spinner"></div>
-              <p className="submission-loading-text">Saving score...</p>
+            <div style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '80px 20px',
+              minHeight: '400px'
+            }}>
+              <div style={{ position: 'relative', width: '200px', height: '200px' }}>
+                {/* Outer rotating gradient ring */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '180px',
+                    height: '180px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 25%, #ff6b9d 50%, #ffd93d 75%, #8247ff 100%)',
+                    backgroundSize: '400% 400%',
+                    animation: 'rotateGradient 3s linear infinite, pulse 2s ease-in-out infinite',
+                    filter: 'blur(20px)',
+                    opacity: 0.6
+                  }}
+                />
+
+                {/* Middle spinning circle */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '140px',
+                    height: '140px',
+                    borderRadius: '50%',
+                    border: '4px solid transparent',
+                    borderTopColor: '#8247ff',
+                    borderRightColor: '#54d0ff',
+                    borderBottomColor: '#ff6b9d',
+                    borderLeftColor: '#ffd93d',
+                    animation: 'spin 1.5s linear infinite'
+                  }}
+                />
+
+                {/* Inner pulsing circles */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '100px',
+                    height: '100px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 100%)',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                    opacity: 0.8
+                  }}
+                />
+
+                {/* Center circle with shimmer */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                    backgroundSize: '300% 300%',
+                    animation: 'shimmer 3s ease-in-out infinite',
+                    boxShadow: '0 0 30px rgba(130, 71, 255, 0.6), 0 0 50px rgba(84, 208, 255, 0.4)'
+                  }}
+                />
+
+                {/* Orbiting dots */}
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      background: ['#8247ff', '#54d0ff', '#ff6b9d', '#ffd93d'][i],
+                      transform: `translate(-50%, -50%) rotate(${i * 90}deg) translateY(-70px)`,
+                      animation: `orbit 2s linear infinite`,
+                      animationDelay: `${i * 0.5}s`,
+                      boxShadow: `0 0 15px ${['#8247ff', '#54d0ff', '#ff6b9d', '#ffd93d'][i]}`
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Loading text */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 'calc(50% - 140px)',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  background: 'linear-gradient(135deg, #8247ff 0%, #54d0ff 30%, #ff6b9d 60%, #ffd93d 100%)',
+                  backgroundSize: '300% 300%',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  animation: 'shimmer 3s ease-in-out infinite',
+                  letterSpacing: '1px'
+                }}
+              >
+                Saving score...
+              </div>
             </div>
           ) : illugenData?.variations?.length ? (
             /* Illugen Layout: Wider, symmetrical with simple play buttons */

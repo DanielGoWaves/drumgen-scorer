@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 from typing import List, Optional
 
@@ -8,7 +9,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
-from ..models import Prompt, PromptCreate, PromptRead
+from ..models import Prompt, PromptCreate, PromptRead, TestResult
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -252,7 +255,26 @@ async def delete_prompt(prompt_id: int, session: AsyncSession = Depends(get_sess
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+
+    # Count linked results to understand impact
+    linked_results_count = (
+        await session.execute(
+            select(func.count()).select_from(TestResult).where(TestResult.prompt_id == prompt.id)
+        )
+    ).scalar() or 0
+
+    logger.info(
+        "Deleting prompt id=%s is_user_generated=%s used_count=%s linked_results=%s text_snippet=%r",
+        prompt.id,
+        prompt.is_user_generated,
+        prompt.used_count,
+        linked_results_count,
+        prompt.text[:120] if prompt.text else "",
+    )
+
     await session.delete(prompt)
     await session.commit()
+
+    logger.info("Deleted prompt id=%s (cascade handled by ORM)", prompt.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

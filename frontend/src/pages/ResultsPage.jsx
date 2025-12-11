@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import api, { API_BASE_URL } from '../services/api';
 import AudioPlayer from '../components/AudioPlayer';
 
-export default function ResultsPage() {
+export default function ResultsPage({ setOverlayLoading }) {
   const location = useLocation();
   const [results, setResults] = useState([]);
   const [prompts, setPrompts] = useState({});
@@ -28,6 +28,8 @@ export default function ResultsPage() {
   const [sortColumn, setSortColumn] = useState('tested_at');
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
   
+  const initialLoad = useRef(false);
+
   // Update filters when navigating to results page with state (e.g., clicking from dashboard)
   // Use location.key to detect navigation changes even when pathname stays the same
   useEffect(() => {
@@ -41,15 +43,22 @@ export default function ResultsPage() {
     }
   }, [location.key, location.state]);
   
-  // Load results when filters change
+  // Initial load with overlay
   useEffect(() => {
+    const run = async () => {
+      setOverlayLoading?.(true);
+      await Promise.all([loadResults(), loadDrumTypes()]);
+      setOverlayLoading?.(false);
+      initialLoad.current = true;
+    };
+    run();
+  }, []);
+
+  // Load results when filters change (after initial load)
+  useEffect(() => {
+    if (!initialLoad.current) return;
     loadResults();
   }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
-  
-  // Load drum types once on mount
-  useEffect(() => {
-    loadDrumTypes();
-  }, []);
 
   const handleNoteFileSelect = (file) => {
     if (!file) return;

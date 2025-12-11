@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 
-export default function PromptsPage() {
+export default function PromptsPage({ setOverlayLoading }) {
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,7 +14,13 @@ export default function PromptsPage() {
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc' - default 'desc' for 'used_count'
 
   useEffect(() => {
-    loadPrompts();
+    const run = async () => {
+      // Only show the overlay on initial page entry
+      setOverlayLoading?.(true);
+      await loadPrompts();
+      setOverlayLoading?.(false);
+    };
+    run();
   }, []);
 
   const loadPrompts = async () => {

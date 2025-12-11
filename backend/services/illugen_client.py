@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 ILLUGEN_BASE_URL = os.getenv(
-    "ILLUGEN_BASE_URL", "https://dev-onla-samplemaker-server.waves.com"
+    "ILLUGEN_BASE_URL", "https://test-onla-samplemaker-server.waves.com"
 )
 REQUEST_TIMEOUT = float(os.getenv("ILLUGEN_TIMEOUT", "30"))
 MAX_RETRIES = int(os.getenv("ILLUGEN_MAX_RETRIES", "3"))
