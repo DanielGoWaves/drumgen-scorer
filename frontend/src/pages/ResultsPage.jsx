@@ -199,6 +199,13 @@ export default function ResultsPage() {
     loadResults();
   }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
 
+  const parseTestedAt = (dateStr) => {
+    if (!dateStr) return null;
+    const hasTimezone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(dateStr);
+    const normalized = hasTimezone ? dateStr : `${dateStr}Z`;
+    return new Date(normalized);
+  };
+
   const handleSort = (column) => {
     if (sortColumn === column) {
       // Toggle direction if same column
@@ -244,8 +251,8 @@ export default function ResultsPage() {
           bVal = b.llm_accuracy_score;
           break;
         case 'tested_at':
-          aVal = new Date(a.tested_at).getTime();
-          bVal = new Date(b.tested_at).getTime();
+          aVal = parseTestedAt(a.tested_at)?.getTime() || 0;
+          bVal = parseTestedAt(b.tested_at)?.getTime() || 0;
           break;
         default:
           return 0;
@@ -266,7 +273,18 @@ export default function ResultsPage() {
   };
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleString();
+    const parsed = parseTestedAt(dateStr);
+    return parsed
+      ? parsed.toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        })
+      : '-';
   };
 
   // Check if any filters are active (not default)
@@ -396,78 +414,89 @@ export default function ResultsPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="label">Notes/Attachments</label>
-            <label 
-              htmlFor="hasNotesFilter"
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                marginTop: '8px',
-                cursor: 'pointer',
-                position: 'relative'
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <label className="label" style={{ textAlign: 'center', width: '100%' }}>Notes/Attachments</label>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                height: '44px', // align vertically with adjacent selects
+                marginTop: '6px',
+                width: '100%',
               }}
             >
-              <input
-                type="checkbox"
-                id="hasNotesFilter"
-                checked={hasNotesFilter}
-                onChange={(e) => setHasNotesFilter(e.target.checked)}
+              <label 
+                htmlFor="hasNotesFilter"
                 style={{ 
-                  width: '20px', 
-                  height: '20px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
                   cursor: 'pointer',
-                  backgroundColor: hasNotesFilter ? 'var(--primary-color)' : 'var(--secondary-bg)',
-                  border: `2px solid ${hasNotesFilter ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                  borderRadius: '4px',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none',
-                  transition: 'all 0.2s ease',
-                  outline: 'none',
-                  margin: 0,
-                  padding: 0
+                  position: 'relative'
                 }}
-                onFocus={(e) => {
-                  e.target.style.boxShadow = '0 0 0 3px var(--focus-outline)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.boxShadow = 'none';
-                }}
-                onMouseEnter={(e) => {
-                  if (!hasNotesFilter) {
-                    e.target.style.borderColor = 'var(--primary-color)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!hasNotesFilter) {
-                    e.target.style.borderColor = 'var(--border-color)';
-                  }
-                }}
-              />
-              {hasNotesFilter && (
-                <svg
-                  style={{
-                    position: 'absolute',
-                    left: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '12px',
-                    height: '12px',
-                    pointerEvents: 'none',
-                    color: '#0d1016'
+              >
+                <input
+                  type="checkbox"
+                  id="hasNotesFilter"
+                  checked={hasNotesFilter}
+                  onChange={(e) => setHasNotesFilter(e.target.checked)}
+                  style={{ 
+                    width: '20px', 
+                    height: '20px', 
+                    cursor: 'pointer',
+                    backgroundColor: hasNotesFilter ? 'var(--primary-color)' : 'var(--secondary-bg)',
+                    border: `2px solid ${hasNotesFilter ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                    borderRadius: '4px',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    transition: 'all 0.2s ease',
+                    outline: 'none',
+                    margin: 0,
+                    padding: 0
                   }}
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M16.7071 5.29289C17.0976 5.68342 17.0976 6.31658 16.7071 6.70711L8.70711 14.7071C8.31658 15.0976 7.68342 15.0976 7.29289 14.7071L3.29289 10.7071C2.90237 10.3166 2.90237 9.68342 3.29289 9.29289C3.68342 8.90237 4.31658 8.90237 4.70711 9.29289L8 12.5858L15.2929 5.29289C15.6834 4.90237 16.3166 4.90237 16.7071 5.29289Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              )}
-            </label>
+                  onFocus={(e) => {
+                    e.target.style.boxShadow = '0 0 0 3px var(--focus-outline)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = 'none';
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!hasNotesFilter) {
+                      e.target.style.borderColor = 'var(--primary-color)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!hasNotesFilter) {
+                      e.target.style.borderColor = 'var(--border-color)';
+                    }
+                  }}
+                />
+                {hasNotesFilter && (
+                  <svg
+                    style={{
+                      position: 'absolute',
+                      left: '4px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '12px',
+                      height: '12px',
+                      pointerEvents: 'none',
+                      color: '#0d1016'
+                    }}
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M16.7071 5.29289C17.0976 5.68342 17.0976 6.31658 16.7071 6.70711L8.70711 14.7071C8.31658 15.0976 7.68342 15.0976 7.29289 14.7071L3.29289 10.7071C2.90237 10.3166 2.90237 9.68342 3.29289 9.29289C3.68342 8.90237 4.31658 8.90237 4.70711 9.29289L8 12.5858L15.2929 5.29289C15.6834 4.90237 16.3166 4.90237 16.7071 5.29289Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                )}
+              </label>
+            </div>
           </div>
         </div>
       </div>

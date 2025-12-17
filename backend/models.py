@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from pydantic import BaseModel, conint
@@ -45,7 +45,12 @@ class TestResult(Base):
         ForeignKey("illugen_generations.id", ondelete="SET NULL"), nullable=True
     )
     illugen_attachments: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    tested_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    tested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     prompt: Mapped["Prompt"] = relationship("Prompt", back_populates="results")
