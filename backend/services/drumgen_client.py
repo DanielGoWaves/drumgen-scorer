@@ -35,7 +35,7 @@ class DrumGenClient:
             raise last_exc
         raise RuntimeError("Unexpected request failure without exception.")
 
-    async def process_text(self, text: str, model_version: str = "v12") -> Dict[str, Any]:
+    async def process_text(self, text: str, model_version: str = "v15") -> Dict[str, Any]:
         url = f"{self.base_url}/process_text"
         resp = await self._request("POST", url, json={"text": text, "model_version": model_version})
         return resp.json()

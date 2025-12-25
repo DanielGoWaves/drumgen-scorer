@@ -51,7 +51,7 @@ export default function TestingPage() {
   const [wasGenerating, setWasGenerating] = useState(false);
   const [freeTextMode, setFreeTextMode] = useState(() => getInitialState('freeTextMode', false));
   const [freeText, setFreeText] = useState(() => getInitialState('freeText', ''));
-  const [modelVersion, setModelVersion] = useState(() => getInitialState('modelVersion', 'v12'));
+  const [modelVersion, setModelVersion] = useState(() => getInitialState('modelVersion', 'v15'));
   
   // Free text metadata - user fills these in after generation
   const [freeTextMetadata, setFreeTextMetadata] = useState(() => getInitialState('freeTextMetadata', {
@@ -194,7 +194,7 @@ export default function TestingPage() {
     }
   }, []);
 
-  // Auto-select v13 for cymbals, v14 for electric drums, v12 for non-cymbals (unless user manually changed it)
+  // Auto-select v13 for cymbals, v14 for electric drums, v15 for acoustic drums (unless user manually changed it)
   const [userModifiedVersion, setUserModifiedVersion] = useState(false);
   
   useEffect(() => {
@@ -207,7 +207,7 @@ export default function TestingPage() {
       } else if (electricDrumTypes.includes(currentPrompt.drum_type.toLowerCase())) {
         setModelVersion('v14');
       } else {
-        setModelVersion('v12');
+        setModelVersion('v15');
       }
     }
   }, [currentPrompt, userModifiedVersion, freeTextMode]);
@@ -771,6 +771,7 @@ export default function TestingPage() {
               <option value="v12">V12</option>
               <option value="v13">V13 (Cymbals Only)</option>
               <option value="v14">V14 (Electronic)</option>
+              <option value="v15">V15 (Acoustic)</option>
             </select>
             {currentPrompt && currentPrompt.drum_type && !freeTextMode && 
              ['ride', 'crash', 'china', 'splash', 'hihat', 'closed hihat', 'open hihat'].includes(currentPrompt.drum_type.toLowerCase()) && (
@@ -867,7 +868,9 @@ export default function TestingPage() {
                       ? "Describe the electric drum sound you want... (e.g., 'punchy 808 kick with reverb', 'crispy snare with vintage character'). Use v14 for electric drums."
                       : modelVersion === 'v13'
                       ? "Describe the cymbal sound you want... (Tip: Use V13 for cymbals)"
-                      : "Describe the drum sound you want... (Tip: Switch to V13 for cymbals, V14 for electric drums)"}
+                      : modelVersion === 'v15'
+                      ? "Describe the acoustic drum sound you want... (e.g., 'warm maple kick', 'crispy snare with tight response'). V15 is for acoustic drums."
+                      : "Describe the drum sound you want... (Tip: Switch to V13 for cymbals, V14 for electric drums, V15 for acoustic drums)"}
                     rows={2}
                     className={`input ${freeTextError ? 'flash-error-active' : ''}`}
                     style={{ 

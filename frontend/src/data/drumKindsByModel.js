@@ -1,9 +1,10 @@
 /**
  * Drum kinds available for each model version
  * v11 - Legacy general drums
- * v12 - General drums (kick, snare, tom, etc.)
+ * v12 - Legacy general drums (deprecated, use v15)
  * v13 - Cymbals only
  * v14 - Electronic drums
+ * v15 - Acoustic drums (kick, snare, tom, etc.)
  */
 
 export const DRUM_KINDS_BY_MODEL = {
@@ -50,6 +51,23 @@ export const DRUM_KINDS_BY_MODEL = {
     'Impact',
     'Kick',
     'Snare'
+  ],
+  v15: [
+    'Kick',
+    'Snare',
+    'Tom',
+    'Ride',
+    'Crash',
+    'HiHat',
+    'ClosedHiHat',
+    'OpenHiHat',
+    'China',
+    'Splash',
+    'Bongo',
+    'Conga',
+    'Triangle',
+    'Woodblock',
+    'Cabasa'
   ]
 };
 

@@ -22,7 +22,7 @@ DRUM_TYPES = [
 ]
 
 # Model versions
-MODEL_VERSIONS = ["v11", "v12", "v13"]
+MODEL_VERSIONS = ["v11", "v12", "v13", "v14", "v15"]
 
 # Test prompt templates (simple ones for testing only)
 TEST_PROMPTS = [
@@ -78,26 +78,29 @@ async def generate_test_data():
             prompt.used_count += 1
             
             # Determine model version
-            # Cymbals should use v13, others distributed across v11/v12/v13
+            # Cymbals should use v13, electric drums use v14, acoustic drums use v15
             cymbal_types = ['ride', 'crash', 'china', 'splash', 'hihat', 'closed hihat', 'open hihat']
+            electric_types = ['clap', 'snap', 'scratch', 'impact']
             if prompt.drum_type in cymbal_types:
                 version = 'v13'
+            elif prompt.drum_type in electric_types:
+                version = 'v14'
             else:
-                # 40% v11, 30% v12, 30% v13
+                # Acoustic drums: 30% v11, 20% v12 (legacy), 50% v15 (current)
                 rand = random.random()
-                if rand < 0.4:
+                if rand < 0.3:
                     version = 'v11'
-                elif rand < 0.7:
+                elif rand < 0.5:
                     version = 'v12'
                 else:
-                    version = 'v13'
+                    version = 'v15'
             
             # Generate realistic scores based on difficulty
             # Harder prompts tend to have slightly lower scores
             difficulty_factor = (11 - prompt.difficulty) / 10.0  # 1.0 for easy, 0.1 for hard
             
             # Audio quality: varies but trends based on version
-            version_bonus = {'v11': 0, 'v12': 0.5, 'v13': 1.0}[version]
+            version_bonus = {'v11': 0, 'v12': 0.5, 'v13': 1.0, 'v14': 0.8, 'v15': 1.2}[version]
             audio_base = 5 + random.uniform(-2, 2) + (difficulty_factor * 1.5) + version_bonus
             audio_score = max(1, min(10, int(audio_base)))
             
@@ -147,7 +150,7 @@ async def generate_test_data():
         print(f"Total test prompts: 100")
         print(f"Total test results: 1000")
         print(f"Date range: Last 30 days")
-        print(f"Model versions: v11, v12, v13")
+        print(f"Model versions: v11, v12, v13, v14, v15")
         print(f"Drum types: {len(DRUM_TYPES)} types")
         print(f"Difficulty range: 1-10")
         print("\nTo identify test data:")
