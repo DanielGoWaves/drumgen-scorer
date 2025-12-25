@@ -3,13 +3,14 @@ from __future__ import annotations
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 import math
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -263,6 +264,230 @@ async def list_results(
     return [TestResultRead.model_validate(r) for r in results]
 
 
+@router.get("/export-data", summary="Export all test data for analysis")
+async def export_data(
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Export comprehensive test data for LLM analysis.
+    
+    Returns:
+    - All test results with full details
+    - Scores by version, drum type, and difficulty
+    - User notes with context
+    - Analytics and distributions
+    """
+    
+    try:
+        # Get all test results with prompts
+        query = select(TestResult, Prompt).join(Prompt, TestResult.prompt_id == Prompt.id)
+        result = await session.execute(query)
+        all_tests = [(test, prompt) for test, prompt in result.all()]
+        
+        # Organize data by multiple dimensions
+        export_dict = {
+            "export_timestamp": datetime.now().isoformat(),
+            "total_tests": len(all_tests),
+            "summary": {
+                "overall_generation_score": 0,
+                "avg_audio_quality": 0,
+                "avg_llm_accuracy": 0,
+            },
+            "by_version": {},
+            "by_drum_type": {},
+            "by_difficulty": {},
+            "by_version_and_drum": {},
+            "by_version_and_difficulty": {},
+            "by_drum_and_difficulty": {},
+            "all_results": [],
+            "user_notes": [],
+        }
+        
+        if not all_tests:
+            return JSONResponse(content=export_dict)
+        
+        # Calculate overall metrics
+        generation_scores = []
+        audio_scores = []
+        llm_scores = []
+        
+        for test, prompt in all_tests:
+            gen_score = calculate_generation_score(prompt.difficulty, test.audio_quality_score)
+            generation_scores.append(gen_score)
+            audio_scores.append(test.audio_quality_score)
+            llm_scores.append(test.llm_accuracy_score)
+        
+        export_dict["summary"]["overall_generation_score"] = round(sum(generation_scores) / len(generation_scores), 2)
+        export_dict["summary"]["avg_audio_quality"] = round(sum(audio_scores) / len(audio_scores), 2)
+        export_dict["summary"]["avg_llm_accuracy"] = round(sum(llm_scores) / len(llm_scores), 2)
+        
+        # Process each test result
+        for test, prompt in all_tests:
+            version = test.model_version or "unknown"
+            drum_type = prompt.drum_type or "unknown"
+            difficulty = prompt.difficulty
+            
+            gen_score = calculate_generation_score(difficulty, test.audio_quality_score)
+            
+            # Initialize dictionaries (use string keys for JSON serialization)
+            if version not in export_dict["by_version"]:
+                export_dict["by_version"][version] = {
+                    "count": 0,
+                    "generation_scores": [],
+                    "audio_scores": [],
+                    "llm_scores": []
+                }
+            if drum_type not in export_dict["by_drum_type"]:
+                export_dict["by_drum_type"][drum_type] = {
+                    "count": 0,
+                    "generation_scores": [],
+                    "audio_scores": [],
+                    "llm_scores": []
+                }
+            
+            # Use string key for difficulty
+            diff_key = str(difficulty)
+            if diff_key not in export_dict["by_difficulty"]:
+                export_dict["by_difficulty"][diff_key] = {
+                    "difficulty": difficulty,
+                    "count": 0,
+                    "generation_scores": [],
+                    "audio_scores": [],
+                    "llm_scores": [],
+                    "score_distribution": {str(i): 0 for i in range(1, 11)}
+                }
+            
+            # Version + Drum
+            version_drum_key = f"{version}_{drum_type}"
+            if version_drum_key not in export_dict["by_version_and_drum"]:
+                export_dict["by_version_and_drum"][version_drum_key] = {
+                    "version": version,
+                    "drum_type": drum_type,
+                    "count": 0,
+                    "generation_scores": [],
+                    "audio_scores": [],
+                    "llm_scores": []
+                }
+            
+            # Version + Difficulty
+            version_diff_key = f"{version}_diff{difficulty}"
+            if version_diff_key not in export_dict["by_version_and_difficulty"]:
+                export_dict["by_version_and_difficulty"][version_diff_key] = {
+                    "version": version,
+                    "difficulty": difficulty,
+                    "count": 0,
+                    "generation_scores": [],
+                    "audio_scores": [],
+                    "llm_scores": []
+                }
+            
+            # Drum + Difficulty
+            drum_diff_key = f"{drum_type}_diff{difficulty}"
+            if drum_diff_key not in export_dict["by_drum_and_difficulty"]:
+                export_dict["by_drum_and_difficulty"][drum_diff_key] = {
+                    "drum_type": drum_type,
+                    "difficulty": difficulty,
+                    "count": 0,
+                    "generation_scores": [],
+                    "audio_scores": [],
+                    "llm_scores": []
+                }
+            
+            # Add scores to all relevant categories
+            export_dict["by_version"][version]["count"] += 1
+            export_dict["by_version"][version]["generation_scores"].append(gen_score)
+            export_dict["by_version"][version]["audio_scores"].append(test.audio_quality_score)
+            export_dict["by_version"][version]["llm_scores"].append(test.llm_accuracy_score)
+            
+            export_dict["by_drum_type"][drum_type]["count"] += 1
+            export_dict["by_drum_type"][drum_type]["generation_scores"].append(gen_score)
+            export_dict["by_drum_type"][drum_type]["audio_scores"].append(test.audio_quality_score)
+            export_dict["by_drum_type"][drum_type]["llm_scores"].append(test.llm_accuracy_score)
+            
+            export_dict["by_difficulty"][diff_key]["count"] += 1
+            export_dict["by_difficulty"][diff_key]["generation_scores"].append(gen_score)
+            export_dict["by_difficulty"][diff_key]["audio_scores"].append(test.audio_quality_score)
+            export_dict["by_difficulty"][diff_key]["llm_scores"].append(test.llm_accuracy_score)
+            audio_score_int = max(1, min(10, int(round(test.audio_quality_score))))
+            export_dict["by_difficulty"][diff_key]["score_distribution"][str(audio_score_int)] += 1
+            
+            export_dict["by_version_and_drum"][version_drum_key]["count"] += 1
+            export_dict["by_version_and_drum"][version_drum_key]["generation_scores"].append(gen_score)
+            export_dict["by_version_and_drum"][version_drum_key]["audio_scores"].append(test.audio_quality_score)
+            export_dict["by_version_and_drum"][version_drum_key]["llm_scores"].append(test.llm_accuracy_score)
+            
+            export_dict["by_version_and_difficulty"][version_diff_key]["count"] += 1
+            export_dict["by_version_and_difficulty"][version_diff_key]["generation_scores"].append(gen_score)
+            export_dict["by_version_and_difficulty"][version_diff_key]["audio_scores"].append(test.audio_quality_score)
+            export_dict["by_version_and_difficulty"][version_diff_key]["llm_scores"].append(test.llm_accuracy_score)
+            
+            export_dict["by_drum_and_difficulty"][drum_diff_key]["count"] += 1
+            export_dict["by_drum_and_difficulty"][drum_diff_key]["generation_scores"].append(gen_score)
+            export_dict["by_drum_and_difficulty"][drum_diff_key]["audio_scores"].append(test.audio_quality_score)
+            export_dict["by_drum_and_difficulty"][drum_diff_key]["llm_scores"].append(test.llm_accuracy_score)
+            
+            # Collect full result details - convert to dict and handle JSON serialization
+            result_detail = {
+                "result_id": test.id,
+                "prompt_text": prompt.text,
+                "prompt_category": prompt.category,
+                "drum_type": drum_type,
+                "difficulty": difficulty,
+                "model_version": version,
+                "audio_quality_score": float(test.audio_quality_score),
+                "llm_accuracy_score": float(test.llm_accuracy_score),
+                "generation_score": round(gen_score, 2),
+                "generated_json": test.generated_json if test.generated_json else {},
+                "llm_response": test.llm_response if test.llm_response else "",
+                "tested_at": str(test.tested_at) if test.tested_at else "",
+                "notes": test.notes if test.notes else "",
+                "has_notes_audio": bool(test.notes_audio_path),
+                "has_illugen_attachments": bool(test.illugen_attachments and test.illugen_attachments.get("items")),
+            }
+            export_dict["all_results"].append(result_detail)
+            
+            # Collect user notes with context
+            if test.notes and test.notes.strip():
+                export_dict["user_notes"].append({
+                    "result_id": test.id,
+                    "note": test.notes,
+                    "drum_type": drum_type,
+                    "model_version": version,
+                    "difficulty": difficulty,
+                    "audio_quality_score": float(test.audio_quality_score),
+                    "llm_accuracy_score": float(test.llm_accuracy_score),
+                    "prompt_text": prompt.text,
+                    "tested_at": str(test.tested_at) if test.tested_at else "",
+                })
+        
+        # Calculate averages for all grouped categories
+        for category_dict in [
+            export_dict["by_version"],
+            export_dict["by_drum_type"],
+            export_dict["by_difficulty"],
+            export_dict["by_version_and_drum"],
+            export_dict["by_version_and_difficulty"],
+            export_dict["by_drum_and_difficulty"],
+        ]:
+            for key, data in category_dict.items():
+                if data["generation_scores"]:
+                    data["avg_generation_score"] = round(sum(data["generation_scores"]) / len(data["generation_scores"]), 2)
+                if data["audio_scores"]:
+                    data["avg_audio_quality"] = round(sum(data["audio_scores"]) / len(data["audio_scores"]), 2)
+                if data["llm_scores"]:
+                    data["avg_llm_accuracy"] = round(sum(data["llm_scores"]) / len(data["llm_scores"]), 2)
+                # Remove raw score lists to keep export clean
+                del data["generation_scores"]
+                del data["audio_scores"]
+                del data["llm_scores"]
+        
+        return JSONResponse(content=export_dict)
+    
+    except Exception as e:
+        logger.error(f"Export data error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
 @router.get("/{result_id}", response_model=TestResultRead, summary="Get single test result")
 async def get_result(
     result_id: int,
@@ -367,4 +592,5 @@ async def delete_result(
         )
 
     logger.info("Deleted result id=%s", result_id)
+
 

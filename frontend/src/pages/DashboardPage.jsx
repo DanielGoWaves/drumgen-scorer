@@ -70,6 +70,30 @@ export default function DashboardPage({ setOverlayLoading }) {
     }
   };
 
+  const exportData = async () => {
+    try {
+      const { data } = await api.get('/api/results/export-data');
+      
+      // Create a blob and download it
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      link.download = `drumgen-test-data-${timestamp}.json`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export data:', err);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
 
   // Determine if we have data to display
   const hasData = analytics && analytics.total_tests > 0;
@@ -226,7 +250,49 @@ export default function DashboardPage({ setOverlayLoading }) {
         <h2 style={{ fontSize: '24px', fontWeight: '700' }}>
           Analytics Dashboard
         </h2>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={exportData}
+            className="btn btn-secondary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              fontSize: '13px',
+              fontWeight: '600',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderColor: '#667eea',
+              color: '#fff',
+              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+            }}
+            title="Export all test data as JSON for LLM analysis"
+          >
+            <svg 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export Data
+          </button>
           <div style={{ minWidth: '180px' }}>
             <select
               value={selectedVersion}
