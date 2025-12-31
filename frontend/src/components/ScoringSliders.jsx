@@ -131,6 +131,7 @@ export default function ScoringSliders({ scores, onChange, generationError = fal
             onDoubleClick={(e) => handleDoubleClick(e, genScoreRef)}
             style={{ 
               cursor: isDragging === 'gen' ? 'ns-resize' : 'pointer',
+              opacity: 1,
               ...(generationError ? {
                 borderColor: 'var(--secondary-color)',
                 borderWidth: '2px',

@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,8 @@ ILLUGEN_AUDIO_DIR.mkdir(exist_ok=True)
 
 
 class SendPromptRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     prompt_id: Optional[int] = None
     text: Optional[str] = None
     temperature: float = 1.0

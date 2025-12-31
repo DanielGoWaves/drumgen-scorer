@@ -22,6 +22,7 @@ from ..models import (
     TestResultCreate,
     TestResultRead,
     TestResultUpdate,
+    LLMFailure,
 )
 from ..services.analytics import calculate_generation_score
 from ..services.audio_cleanup import cleanup_orphaned_audio_file
@@ -38,7 +39,11 @@ NOTE_AUDIO_DIR.mkdir(exist_ok=True)
 async def submit_score(
     payload: TestResultCreate, session: AsyncSession = Depends(get_session)
 ) -> TestResultRead:
+    """
+    Submit a test result score.
+    """
     # If free text mode, create the prompt first with user-provided tags
+    prompt = None
     if payload.free_text_prompt and not payload.prompt_id:
         new_prompt = Prompt(
             text=payload.free_text_prompt,
@@ -53,16 +58,24 @@ async def submit_score(
         await session.commit()
         await session.refresh(new_prompt)
         prompt_id = new_prompt.id
+        prompt = new_prompt
     else:
         prompt_id = payload.prompt_id
         prompt = await session.get(Prompt, prompt_id)
         if not prompt:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
 
+    # Calculate generation score
+    audio_score = payload.audio_quality_score
+    gen_score = None
+    if prompt and audio_score:
+        gen_score = round(calculate_generation_score(prompt.difficulty, audio_score))
+    
     result = TestResult(
         prompt_id=prompt_id,
-        audio_quality_score=payload.audio_quality_score,
+        audio_quality_score=audio_score,
         llm_accuracy_score=payload.llm_accuracy_score,
+        generation_score=gen_score,
         generated_json=payload.generated_json,
         llm_response=payload.llm_response,
         audio_id=payload.audio_id,
@@ -119,17 +132,27 @@ async def dashboard(
         }
     
     # Calculate overall generation score (audio only, weighted by difficulty)
+    # EXCLUDE N/A scores (where generation_score is NULL)
     generation_scores = []
     audio_scores = []
     llm_scores = []
     
     for test, prompt in tests:
-        gen_score = calculate_generation_score(
-            prompt.difficulty,
-            test.audio_quality_score
-        )
-        generation_scores.append(gen_score)
-        audio_scores.append(test.audio_quality_score)
+        # Only include generation score if it's not N/A
+        if test.generation_score is not None:
+            gen_score = test.generation_score  # Use stored value
+            generation_scores.append(gen_score)
+            if test.audio_quality_score is not None:
+                audio_scores.append(test.audio_quality_score)
+        elif test.audio_quality_score is not None:
+            # Fallback: calculate if not stored (for old records)
+            gen_score = calculate_generation_score(
+                prompt.difficulty,
+                test.audio_quality_score
+            )
+            generation_scores.append(gen_score)
+            audio_scores.append(test.audio_quality_score)
+        # Always include LLM score (even when gen_score is N/A)
         llm_scores.append(test.llm_accuracy_score)
     
     overall_generation_score = sum(generation_scores) / len(generation_scores) if generation_scores else 0
@@ -147,12 +170,20 @@ async def dashboard(
                 "llm_scores": []
             }
         by_version[version]["count"] += 1
-        gen_score = calculate_generation_score(
-            prompt.difficulty,
-            test.audio_quality_score
-        )
-        by_version[version]["generation_scores"].append(gen_score)
-        by_version[version]["audio_scores"].append(test.audio_quality_score)
+        # Only include generation score if not N/A
+        if test.generation_score is not None:
+            by_version[version]["generation_scores"].append(test.generation_score)
+            if test.audio_quality_score is not None:
+                by_version[version]["audio_scores"].append(test.audio_quality_score)
+        elif test.audio_quality_score is not None:
+            # Fallback for old records
+            gen_score = calculate_generation_score(
+                prompt.difficulty,
+                test.audio_quality_score
+            )
+            by_version[version]["generation_scores"].append(gen_score)
+            by_version[version]["audio_scores"].append(test.audio_quality_score)
+        # Always include LLM score
         by_version[version]["llm_scores"].append(test.llm_accuracy_score)
     
     # Calculate averages per version
@@ -306,15 +337,23 @@ async def export_data(
         if not all_tests:
             return JSONResponse(content=export_dict)
         
-        # Calculate overall metrics
+        # Calculate overall metrics (EXCLUDE N/A scores)
         generation_scores = []
         audio_scores = []
         llm_scores = []
         
         for test, prompt in all_tests:
-            gen_score = calculate_generation_score(prompt.difficulty, test.audio_quality_score)
-            generation_scores.append(gen_score)
-            audio_scores.append(test.audio_quality_score)
+            # Only include generation score if not N/A
+            if test.generation_score is not None:
+                generation_scores.append(test.generation_score)
+                if test.audio_quality_score is not None:
+                    audio_scores.append(test.audio_quality_score)
+            elif test.audio_quality_score is not None:
+                # Fallback for old records
+                gen_score = calculate_generation_score(prompt.difficulty, test.audio_quality_score)
+                generation_scores.append(gen_score)
+                audio_scores.append(test.audio_quality_score)
+            # Always include LLM score
             llm_scores.append(test.llm_accuracy_score)
         
         export_dict["summary"]["overall_generation_score"] = round(sum(generation_scores) / len(generation_scores), 2)
@@ -327,7 +366,13 @@ async def export_data(
             drum_type = prompt.drum_type or "unknown"
             difficulty = prompt.difficulty
             
-            gen_score = calculate_generation_score(difficulty, test.audio_quality_score)
+            # Get generation score (use stored value or calculate for old records)
+            if test.generation_score is not None:
+                gen_score = test.generation_score
+            elif test.audio_quality_score is not None:
+                gen_score = calculate_generation_score(difficulty, test.audio_quality_score)
+            else:
+                gen_score = None  # N/A case
             
             # Initialize dictionaries (use string keys for JSON serialization)
             if version not in export_dict["by_version"]:
@@ -395,35 +440,63 @@ async def export_data(
             
             # Add scores to all relevant categories
             export_dict["by_version"][version]["count"] += 1
-            export_dict["by_version"][version]["generation_scores"].append(gen_score)
-            export_dict["by_version"][version]["audio_scores"].append(test.audio_quality_score)
+            # Only include generation score if not N/A
+            if gen_score is not None:
+                export_dict["by_version"][version]["generation_scores"].append(gen_score)
+                if test.audio_quality_score is not None:
+                    export_dict["by_version"][version]["audio_scores"].append(test.audio_quality_score)
+            elif test.audio_quality_score is not None:
+                export_dict["by_version"][version]["audio_scores"].append(test.audio_quality_score)
+            # Always include LLM score
             export_dict["by_version"][version]["llm_scores"].append(test.llm_accuracy_score)
             
             export_dict["by_drum_type"][drum_type]["count"] += 1
-            export_dict["by_drum_type"][drum_type]["generation_scores"].append(gen_score)
-            export_dict["by_drum_type"][drum_type]["audio_scores"].append(test.audio_quality_score)
+            if gen_score is not None:
+                export_dict["by_drum_type"][drum_type]["generation_scores"].append(gen_score)
+                if test.audio_quality_score is not None:
+                    export_dict["by_drum_type"][drum_type]["audio_scores"].append(test.audio_quality_score)
+            elif test.audio_quality_score is not None:
+                export_dict["by_drum_type"][drum_type]["audio_scores"].append(test.audio_quality_score)
             export_dict["by_drum_type"][drum_type]["llm_scores"].append(test.llm_accuracy_score)
             
             export_dict["by_difficulty"][diff_key]["count"] += 1
-            export_dict["by_difficulty"][diff_key]["generation_scores"].append(gen_score)
-            export_dict["by_difficulty"][diff_key]["audio_scores"].append(test.audio_quality_score)
+            if gen_score is not None:
+                export_dict["by_difficulty"][diff_key]["generation_scores"].append(gen_score)
+                if test.audio_quality_score is not None:
+                    export_dict["by_difficulty"][diff_key]["audio_scores"].append(test.audio_quality_score)
+                    audio_score_int = max(1, min(10, int(round(test.audio_quality_score))))
+                    export_dict["by_difficulty"][diff_key]["score_distribution"][str(audio_score_int)] += 1
+            elif test.audio_quality_score is not None:
+                export_dict["by_difficulty"][diff_key]["audio_scores"].append(test.audio_quality_score)
+                audio_score_int = max(1, min(10, int(round(test.audio_quality_score))))
+                export_dict["by_difficulty"][diff_key]["score_distribution"][str(audio_score_int)] += 1
             export_dict["by_difficulty"][diff_key]["llm_scores"].append(test.llm_accuracy_score)
-            audio_score_int = max(1, min(10, int(round(test.audio_quality_score))))
-            export_dict["by_difficulty"][diff_key]["score_distribution"][str(audio_score_int)] += 1
             
             export_dict["by_version_and_drum"][version_drum_key]["count"] += 1
-            export_dict["by_version_and_drum"][version_drum_key]["generation_scores"].append(gen_score)
-            export_dict["by_version_and_drum"][version_drum_key]["audio_scores"].append(test.audio_quality_score)
+            if gen_score is not None:
+                export_dict["by_version_and_drum"][version_drum_key]["generation_scores"].append(gen_score)
+                if test.audio_quality_score is not None:
+                    export_dict["by_version_and_drum"][version_drum_key]["audio_scores"].append(test.audio_quality_score)
+            elif test.audio_quality_score is not None:
+                export_dict["by_version_and_drum"][version_drum_key]["audio_scores"].append(test.audio_quality_score)
             export_dict["by_version_and_drum"][version_drum_key]["llm_scores"].append(test.llm_accuracy_score)
             
             export_dict["by_version_and_difficulty"][version_diff_key]["count"] += 1
-            export_dict["by_version_and_difficulty"][version_diff_key]["generation_scores"].append(gen_score)
-            export_dict["by_version_and_difficulty"][version_diff_key]["audio_scores"].append(test.audio_quality_score)
+            if gen_score is not None:
+                export_dict["by_version_and_difficulty"][version_diff_key]["generation_scores"].append(gen_score)
+                if test.audio_quality_score is not None:
+                    export_dict["by_version_and_difficulty"][version_diff_key]["audio_scores"].append(test.audio_quality_score)
+            elif test.audio_quality_score is not None:
+                export_dict["by_version_and_difficulty"][version_diff_key]["audio_scores"].append(test.audio_quality_score)
             export_dict["by_version_and_difficulty"][version_diff_key]["llm_scores"].append(test.llm_accuracy_score)
             
             export_dict["by_drum_and_difficulty"][drum_diff_key]["count"] += 1
-            export_dict["by_drum_and_difficulty"][drum_diff_key]["generation_scores"].append(gen_score)
-            export_dict["by_drum_and_difficulty"][drum_diff_key]["audio_scores"].append(test.audio_quality_score)
+            if gen_score is not None:
+                export_dict["by_drum_and_difficulty"][drum_diff_key]["generation_scores"].append(gen_score)
+                if test.audio_quality_score is not None:
+                    export_dict["by_drum_and_difficulty"][drum_diff_key]["audio_scores"].append(test.audio_quality_score)
+            elif test.audio_quality_score is not None:
+                export_dict["by_drum_and_difficulty"][drum_diff_key]["audio_scores"].append(test.audio_quality_score)
             export_dict["by_drum_and_difficulty"][drum_diff_key]["llm_scores"].append(test.llm_accuracy_score)
             
             # Collect full result details - convert to dict and handle JSON serialization
@@ -434,9 +507,9 @@ async def export_data(
                 "drum_type": drum_type,
                 "difficulty": difficulty,
                 "model_version": version,
-                "audio_quality_score": float(test.audio_quality_score),
+                "audio_quality_score": float(test.audio_quality_score) if test.audio_quality_score is not None else None,
                 "llm_accuracy_score": float(test.llm_accuracy_score),
-                "generation_score": round(gen_score, 2),
+                "generation_score": round(gen_score, 2) if gen_score is not None else None,
                 "generated_json": test.generated_json if test.generated_json else {},
                 "llm_response": test.llm_response if test.llm_response else "",
                 "tested_at": str(test.tested_at) if test.tested_at else "",
@@ -592,5 +665,88 @@ async def delete_result(
         )
 
     logger.info("Deleted result id=%s", result_id)
+
+
+@router.post("/{result_id}/set-as-llm-failure", status_code=status.HTTP_201_CREATED, summary="Convert result to LLM failure")
+async def set_result_as_llm_failure(
+    result_id: int,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Convert a test result to an LLM failure.
+    This will:
+    1. Create an LLM failure record from the result
+    2. Delete the result (removing it from averages)
+    3. Delete the attached audio file
+    """
+    result = await session.get(TestResult, result_id)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Result not found")
+    
+    # Get prompt for prompt_text
+    prompt = await session.get(Prompt, result.prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+    
+    # Extract drum type from LLM response if available
+    drum_type = None
+    if result.llm_response:
+        import json
+        try:
+            llm_data = json.loads(result.llm_response)
+            controls = llm_data.get("controls", {})
+            for key in ['Kind', 'kind', 'KIND']:
+                if key in controls:
+                    drum_type = str(controls[key]).strip()
+                    break
+        except:
+            pass
+    
+    # Use prompt's drum_type if LLM extraction failed
+    if not drum_type:
+        drum_type = prompt.drum_type
+    
+    # Ensure llm_response is not None (required field)
+    llm_response_text = result.llm_response
+    if not llm_response_text:
+        # If no LLM response, try to use generated_json as fallback
+        if result.generated_json:
+            import json
+            try:
+                llm_response_text = json.dumps(result.generated_json, indent=2)
+            except:
+                llm_response_text = str(result.generated_json)
+        else:
+            llm_response_text = 'No LLM response available'
+    
+    # Create LLM failure record (saved to database)
+    llm_failure = LLMFailure(
+        prompt_id=result.prompt_id,
+        prompt_text=prompt.text,
+        llm_response=llm_response_text,
+        model_version=result.model_version,
+        drum_type=drum_type,
+        viewed=False,
+    )
+    session.add(llm_failure)
+    
+    # Store audio_id before deletion
+    audio_id = result.audio_id
+    
+    # Delete the result (this removes it from all averages)
+    await session.delete(result)
+    
+    # Commit both operations atomically
+    await session.commit()
+    
+    # Clean up audio file if it exists (after commit to ensure result is deleted)
+    if audio_id:
+        removed = await cleanup_orphaned_audio_file(audio_id, session)
+        logger.info(
+            "Post-conversion audio cleanup for audio_id=%s removed=%s", audio_id, removed
+        )
+    
+    logger.info("Converted result id=%s to LLM failure id=%s", result_id, llm_failure.id)
+    return {"llm_failure_id": llm_failure.id, "message": "Result converted to LLM failure"}
 
 

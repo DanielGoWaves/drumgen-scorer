@@ -161,6 +161,39 @@ export default function ResultsPage() {
     setEditMode(false);
     clearNoteAttachment();
   };
+  
+  const handleSetAsLLMFailure = async () => {
+    if (!selectedResult) return;
+    
+    const confirmed = window.confirm(
+      'Are you sure you want to set this result as an LLM failure?\n\n' +
+      'This will:\n' +
+      '• Create an LLM failure record\n' +
+      '• Remove this result from all score averages\n' +
+      '• Delete the attached audio file\n\n' +
+      'This action cannot be undone.'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      await api.post(`/api/results/${selectedResult.id}/set-as-llm-failure`);
+      
+      // Remove from list
+      setResults(prev => prev.filter(r => r.id !== selectedResult.id));
+      
+      // Close modal
+      setSelectedResult(null);
+      setEditMode(false);
+      clearNoteAttachment();
+      
+      // Reload results to ensure list is up to date
+      loadResults();
+    } catch (err) {
+      console.error('Failed to set as LLM failure:', err);
+      alert(`Error: ${err?.response?.data?.detail || err.message || 'An unexpected error occurred'}`);
+    }
+  };
 
   const saveEdit = async () => {
     try {
@@ -194,10 +227,6 @@ export default function ResultsPage() {
       alert('Failed to delete result');
     }
   };
-
-  useEffect(() => {
-    loadResults();
-  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
 
   const parseTestedAt = (dateStr) => {
     if (!dateStr) return null;
@@ -1000,6 +1029,18 @@ export default function ResultsPage() {
                 <>
                   <button onClick={() => setEditMode(true)} className="btn btn-primary" style={{ flex: 1 }}>
                     Edit Scores
+                  </button>
+                  <button 
+                    onClick={handleSetAsLLMFailure} 
+                    className="btn"
+                    style={{ 
+                      backgroundColor: '#dc3545', 
+                      borderColor: '#dc3545',
+                      color: 'white',
+                      flex: 1
+                    }}
+                  >
+                    Set as LLM Failure
                   </button>
                   <button 
                     onClick={() => deleteResult(selectedResult.id)} 

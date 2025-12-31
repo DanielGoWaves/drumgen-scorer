@@ -5,15 +5,18 @@ import os
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from sqlalchemy import text
 
 from backend.database import Base, engine, async_session_maker
-from backend.routers import prompts, results, testing
+from backend.routers import prompts, results, testing, llm_failures
 from backend.services.audio_cleanup import cleanup_all_orphaned_audio
+from backend.backup_service import start_backup_scheduler, stop_backup_scheduler
 
 
 app = FastAPI(title="DrumGen Scorer API")
@@ -26,6 +29,49 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Exception handlers to ensure CORS headers are always added
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with CORS headers."""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Handle HTTP exceptions with CORS headers."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle all other exceptions with CORS headers."""
+    import traceback
+    print(f"Unhandled exception: {exc}")
+    print(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 
 async def init_models() -> None:
@@ -43,11 +89,44 @@ async def init_models() -> None:
             await conn.execute(text("ALTER TABLE test_results ADD COLUMN illugen_generation_id INTEGER"))
         if "illugen_attachments" not in columns:
             await conn.execute(text("ALTER TABLE test_results ADD COLUMN illugen_attachments JSON"))
+        # Add generation_score column (nullable) for N/A option
+        if "generation_score" not in columns:
+            await conn.execute(text("ALTER TABLE test_results ADD COLUMN generation_score REAL"))
+        
+        # Check if llm_failures table exists
+        result = await conn.execute(text("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='llm_failures'
+        """))
+        if not result.scalar():
+            await conn.execute(text("""
+                CREATE TABLE llm_failures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    prompt_id INTEGER,
+                    prompt_text TEXT NOT NULL,
+                    llm_response TEXT NOT NULL,
+                    model_version VARCHAR,
+                    drum_type VARCHAR,
+                    viewed INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    free_text_prompt TEXT,
+                    free_text_drum_type VARCHAR,
+                    free_text_difficulty INTEGER,
+                    free_text_category VARCHAR,
+                    FOREIGN KEY (prompt_id) REFERENCES prompts(id) ON DELETE SET NULL
+                )
+            """))
+            await conn.execute(text("CREATE INDEX idx_llm_failures_model_version ON llm_failures(model_version)"))
+            await conn.execute(text("CREATE INDEX idx_llm_failures_drum_type ON llm_failures(drum_type)"))
+            await conn.execute(text("CREATE INDEX idx_llm_failures_viewed ON llm_failures(viewed)"))
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
     await init_models()
+    
+    # Start backup service every 12 hours (43200 seconds)
+    start_backup_scheduler(interval_seconds=43200)
     
     # Clean up orphaned audio files on startup
     async with async_session_maker() as session:
@@ -60,6 +139,7 @@ async def on_startup() -> None:
 app.include_router(prompts.router, prefix="/api/prompts", tags=["prompts"])
 app.include_router(testing.router, prefix="/api/test", tags=["testing"])
 app.include_router(results.router, prefix="/api/results", tags=["results"])
+app.include_router(llm_failures.router, prefix="/api/llm-failures", tags=["llm-failures"])
 
 
 # Audio file serving endpoint

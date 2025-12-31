@@ -34,3 +34,5 @@ dist/
 # Logs
 *.log
 
+# Database backups (kept locally only, not in git)
+database_backups/

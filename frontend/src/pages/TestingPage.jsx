@@ -446,7 +446,7 @@ export default function TestingPage() {
       return;
     }
     
-    // Check that both scores are set
+    // Check that scores are set
     let hasError = false;
     if (scores.audio_quality_score === null || scores.audio_quality_score === undefined) {
       setGenerationScoreError(true);
@@ -558,8 +558,10 @@ export default function TestingPage() {
         }
       }
       
+      // Build payload
       const payload = {
-        ...scores,
+        llm_accuracy_score: scores.llm_accuracy_score,
+        audio_quality_score: scores.audio_quality_score,
         generated_json: llmJson,
         llm_response: llmResponse,
         audio_id: audioId,
@@ -633,6 +635,80 @@ export default function TestingPage() {
       }
     } catch (err) {
       setStatus(`Error: ${err?.response?.data?.detail || err.message}`);
+      setSubmitting(false);
+    }
+  };
+
+  const submitLLMFailure = async () => {
+    if (!currentPrompt && !freeTextMode) {
+      setStatus('Cannot submit LLM failure without prompt.');
+      return;
+    }
+    
+    if (!llmResponse) {
+      setStatus('No LLM response to submit as failure.');
+      return;
+    }
+    
+    setSubmitting(true);
+    setStatus('Submitting LLM failure...');
+    try {
+      const promptText = freeTextMode ? freeText : (currentPrompt?.text || '');
+      
+      // Extract kind from LLM response
+      const llmKind = extractKindFromLLM(llmJson);
+      
+      const payload = {
+        prompt_text: promptText,
+        llm_response: llmResponse,
+        model_version: modelVersion,
+        drum_type: llmKind || freeTextMetadata.drum_type || null,
+      };
+      
+      if (freeTextMode) {
+        payload.free_text_prompt = freeText;
+        payload.free_text_drum_type = freeTextMetadata.drum_type;
+        payload.free_text_difficulty = freeTextMetadata.difficulty;
+        payload.free_text_category = 'user-generated';
+      } else {
+        payload.prompt_id = currentPrompt.id;
+      }
+      
+      await api.post('/api/llm-failures/', payload);
+      
+      setStatus('✓ LLM failure recorded!');
+      setTimeout(() => {
+        setStatus('');
+      }, 3000);
+      
+      // Reset and load next prompt
+      setNoteAudioFile(null);
+      setNoteAudioPath('');
+      setNoteAttachments([]);
+      setIllugenData(null);
+      setNoteDragActive(false);
+      if (noteFileInputRef.current) {
+        noteFileInputRef.current.value = '';
+      }
+      
+      if (!freeTextMode) {
+        setTimeout(() => {
+          setSubmitting(false);
+          loadNextPrompt();
+        }, 1000);
+      } else {
+        setLlmJson(null);
+        setLlmResponse(null);
+        setAudioUrl('');
+        setScores({ audio_quality_score: null, llm_accuracy_score: null });
+        setNotes('');
+        setNotesPanelOpen(false);
+        setFreeText('');
+        setFreeTextMetadata({ drum_type: '', difficulty: null });
+        setSubmitting(false);
+      }
+    } catch (err) {
+      setStatus(`Error: ${err?.response?.data?.detail || err.message || 'An unexpected error occurred'}`);
       setSubmitting(false);
     }
   };
@@ -845,7 +921,9 @@ export default function TestingPage() {
                             key={index}
                             style={{
                               display: 'inline-block',
-                              animation: `dropDown 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)`,
+                              animationName: 'dropDown',
+                              animationDuration: '0.6s',
+                              animationTimingFunction: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
                               animationDelay: `${index * 0.02}s`,
                               animationFillMode: 'backwards',
                               whiteSpace: char === ' ' ? 'pre' : 'normal'
@@ -1134,7 +1212,9 @@ export default function TestingPage() {
                           key={index}
                           style={{
                             display: 'inline-block',
-                            animation: `dropDown 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)`,
+                            animationName: 'dropDown',
+                            animationDuration: '0.6s',
+                            animationTimingFunction: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
                             animationDelay: `${index * 0.02}s`,
                             animationFillMode: 'backwards',
                             whiteSpace: char === ' ' ? 'pre' : 'normal'
@@ -1682,15 +1762,57 @@ export default function TestingPage() {
                 </div>
               </div>
 
-              {/* Submit Button */}
-              <div style={{ maxWidth: '920px', margin: '16px auto 0' }}>
+              {/* Submit Buttons */}
+              <div style={{ maxWidth: '920px', margin: '16px auto 0', display: 'flex', gap: '12px' }}>
                 <button 
                   onClick={submitScoreAndNext} 
                   disabled={loading || submitting}
                   className="btn btn-primary"
-                  style={{ width: '100%', justifyContent: 'center', zIndex: 1 }}
+                  style={{ flex: 2, justifyContent: 'center', zIndex: 1 }}
                 >
                   {freeTextMode ? 'Submit Score' : 'Submit Score & Next Prompt'}
+                </button>
+                <button 
+                  onClick={submitLLMFailure} 
+                  disabled={loading || submitting || !llmResponse}
+                  className="btn"
+                  style={{ 
+                    flex: 1,
+                    justifyContent: 'center', 
+                    zIndex: 1,
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)',
+                    backgroundSize: '300% 300%',
+                    borderColor: '#ef4444',
+                    color: 'white',
+                    fontWeight: '600',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                    transition: 'all 150ms ease',
+                    animation: 'shimmer 3s ease-in-out infinite'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading && !submitting && llmResponse) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.4)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading && !submitting) {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
+                    }
+                  }}
+                  onMouseDown={(e) => {
+                    if (!loading && !submitting && llmResponse) {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    if (!loading && !submitting && llmResponse) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }
+                  }}
+                >
+                  LLM Failure
                 </button>
               </div>
             </>
@@ -1879,15 +2001,59 @@ export default function TestingPage() {
                   </div>
                 </div>
 
-                {/* Submit Button */}
-                <button 
-                  onClick={submitScoreAndNext} 
-                  disabled={loading || submitting}
-                  className="btn btn-primary"
-                  style={{ width: '100%', justifyContent: 'center', zIndex: 1 }}
-                >
-                  {freeTextMode ? 'Submit Score' : 'Submit Score & Next Prompt'}
-                </button>
+                {/* Submit Buttons */}
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button 
+                    onClick={submitScoreAndNext} 
+                    disabled={loading || submitting}
+                    className="btn btn-primary"
+                    style={{ flex: 2, justifyContent: 'center', zIndex: 1 }}
+                  >
+                    {freeTextMode ? 'Submit Score' : 'Submit Score & Next Prompt'}
+                  </button>
+                  <button 
+                    onClick={submitLLMFailure} 
+                    disabled={loading || submitting || !llmResponse}
+                    className="btn"
+                    style={{ 
+                      flex: 1,
+                      justifyContent: 'center', 
+                      zIndex: 1,
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)',
+                      backgroundSize: '300% 300%',
+                      borderColor: '#ef4444',
+                      color: 'white',
+                      fontWeight: '600',
+                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                      transition: 'all 150ms ease',
+                      animation: 'shimmer 3s ease-in-out infinite'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loading && !submitting && llmResponse) {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(239, 68, 68, 0.4)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loading && !submitting) {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
+                      }
+                    }}
+                    onMouseDown={(e) => {
+                      if (!loading && !submitting && llmResponse) {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      if (!loading && !submitting && llmResponse) {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }
+                    }}
+                  >
+                    LLM Failure
+                  </button>
+                </div>
               </div>
             </>
           )}

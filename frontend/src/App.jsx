@@ -4,6 +4,7 @@ import TestingPage from './pages/TestingPage';
 import DashboardPage from './pages/DashboardPage';
 import ResultsPage from './pages/ResultsPage';
 import PromptsPage from './pages/PromptsPage';
+import LLMFailuresPage from './pages/LLMFailuresPage';
 import LoadingOverlay from './components/LoadingOverlay';
 import './styles/theme.css';
 
@@ -36,6 +37,12 @@ const Layout = ({ children, setOverlayLoading, overlayLoading }) => {
             Results
           </Link>
           <Link 
+            to="/llm-failures" 
+            className={`nav-link ${location.pathname === '/llm-failures' ? 'active' : ''}`}
+          >
+            LLM Failures
+          </Link>
+          <Link 
             to="/prompts" 
             className={`nav-link ${location.pathname === '/prompts' ? 'active' : ''}`}
           >
@@ -61,6 +68,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage setOverlayLoading={setOverlayLoading} />} />
           <Route path="/results" element={<ResultsPage setOverlayLoading={setOverlayLoading} />} />
           <Route path="/prompts" element={<PromptsPage setOverlayLoading={setOverlayLoading} />} />
+          <Route path="/llm-failures" element={<LLMFailuresPage />} />
           <Route path="*" element={<Navigate to="/test" replace />} />
         </Routes>
       </Layout>
