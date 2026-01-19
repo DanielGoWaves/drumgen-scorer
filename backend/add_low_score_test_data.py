@@ -45,11 +45,11 @@ async def add_low_scores():
                 audio_score = random.choice([1, 2, 3])
                 llm_score = random.choice([4, 5, 6])  # keep llm moderate
                 tested_at = base_date + timedelta(hours=i * 2 + j)
-                # Cymbals use v13, electric use v14, acoustic use v15 or legacy v12
+                # Cymbals use v16, electric use v14, acoustic use v15 or legacy v12
                 cymbal_types = ['ride', 'crash', 'china', 'splash', 'hihat', 'closed hihat', 'open hihat']
                 electric_types = ['clap', 'snap', 'scratch', 'impact']
                 if prompt.drum_type and prompt.drum_type.lower() in cymbal_types:
-                    version = "v13"
+                    version = "v16"
                 elif prompt.drum_type and prompt.drum_type.lower() in electric_types:
                     version = "v14"
                 else:

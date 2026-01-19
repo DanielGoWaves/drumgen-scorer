@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import api, { API_BASE_URL } from '../services/api';
 import AudioPlayer from '../components/AudioPlayer';
@@ -7,7 +7,6 @@ import LoadingOverlay from '../components/LoadingOverlay';
 export default function ResultsPage() {
   const location = useLocation();
   const [results, setResults] = useState([]);
-  const [prompts, setPrompts] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedResult, setSelectedResult] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -23,11 +22,35 @@ export default function ResultsPage() {
   const [versionFilter, setVersionFilter] = useState(location.state?.modelVersion || 'all');
   const [audioScoreFilter, setAudioScoreFilter] = useState(location.state?.audioScore ? String(location.state.audioScore) : 'all');
   const [hasNotesFilter, setHasNotesFilter] = useState(false);
-  const [availableDrumTypes, setAvailableDrumTypes] = useState([]);
   
   // Sorting - Default to most recent first
   const [sortColumn, setSortColumn] = useState('tested_at');
   const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
+  
+  // Cache key for preventing unnecessary refetches
+  const cacheKeyRef = useRef('');
+  
+  // Memoize prompts map from results (no longer need separate API calls)
+  const prompts = useMemo(() => {
+    const map = {};
+    results.forEach(r => {
+      if (r.prompt) {
+        map[r.prompt_id] = r.prompt;
+      }
+    });
+    return map;
+  }, [results]);
+  
+  // Memoize available drum types from results
+  const availableDrumTypes = useMemo(() => {
+    const types = new Set();
+    results.forEach(r => {
+      if (r.prompt?.drum_type) {
+        types.add(r.prompt.drum_type);
+      }
+    });
+    return Array.from(types).sort();
+  }, [results]);
   
   // Update filters when navigating to results page with state (e.g., clicking from dashboard)
   // Use location.key to detect navigation changes even when pathname stays the same
@@ -46,11 +69,6 @@ export default function ResultsPage() {
   useEffect(() => {
     loadResults();
   }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
-  
-  // Load drum types once on mount
-  useEffect(() => {
-    loadDrumTypes();
-  }, []);
 
   const handleNoteFileSelect = (file) => {
     if (!file) return;
@@ -85,16 +103,6 @@ export default function ResultsPage() {
     }
   };
 
-  const loadDrumTypes = async () => {
-    try {
-      const { data } = await api.get('/api/prompts/', { params: { limit: 5000 } });
-      const types = [...new Set(data.map(p => p.drum_type).filter(Boolean))].sort();
-      setAvailableDrumTypes(types);
-    } catch (err) {
-      console.error('Failed to load drum types:', err);
-    }
-  };
-
   // Calculate color for scores (1=red, 10=green) - same as DashboardPage
   const getScoreColor = (score) => {
     const colors = [
@@ -122,21 +130,18 @@ export default function ResultsPage() {
       if (audioScoreFilter !== 'all') params.audio_quality_score = parseInt(audioScoreFilter);
       if (hasNotesFilter) params.has_notes = true;
       
+      // Create cache key from filters
+      const newCacheKey = JSON.stringify(params);
+      
+      // Only fetch if cache key changed (filters changed)
+      if (newCacheKey === cacheKeyRef.current && results.length > 0) {
+        setLoading(false);
+        return;
+      }
+      
       const { data } = await api.get('/api/results/', { params });
       setResults(data);
-      
-      // Load prompts for each result
-      const promptIds = [...new Set(data.map(r => r.prompt_id))];
-      const promptsMap = {};
-      for (const id of promptIds) {
-        try {
-          const { data: prompt } = await api.get(`/api/prompts/${id}`);
-          promptsMap[id] = prompt;
-        } catch (err) {
-          console.error(`Failed to load prompt ${id}:`, err);
-        }
-      }
-      setPrompts(promptsMap);
+      cacheKeyRef.current = newCacheKey;
     } catch (err) {
       console.error('Failed to load results:', err);
     } finally {
@@ -170,7 +175,7 @@ export default function ResultsPage() {
       'This will:\n' +
       '• Create an LLM failure record\n' +
       '• Remove this result from all score averages\n' +
-      '• Delete the attached audio file\n\n' +
+      '• Preserve the audio file and notes for reference\n\n' +
       'This action cannot be undone.'
     );
     
@@ -179,16 +184,13 @@ export default function ResultsPage() {
     try {
       await api.post(`/api/results/${selectedResult.id}/set-as-llm-failure`);
       
-      // Remove from list
+      // Remove from local state
       setResults(prev => prev.filter(r => r.id !== selectedResult.id));
       
       // Close modal
-      setSelectedResult(null);
-      setEditMode(false);
-      clearNoteAttachment();
+      closeDetail();
       
-      // Reload results to ensure list is up to date
-      loadResults();
+      // DON'T reload - we already updated local state!
     } catch (err) {
       console.error('Failed to set as LLM failure:', err);
       alert(`Error: ${err?.response?.data?.detail || err.message || 'An unexpected error occurred'}`);
@@ -203,12 +205,18 @@ export default function ResultsPage() {
         notesAudioPathValue = uploadedPath;
       }
 
-      await api.put(`/api/results/${selectedResult.id}`, {
+      const { data: updatedResult } = await api.put(`/api/results/${selectedResult.id}`, {
         ...editedScores,
         notes_audio_path: notesAudioPathValue ?? null,
       });
+      
+      // Update the result in local state instead of reloading everything
+      setResults(prev => prev.map(r => 
+        r.id === selectedResult.id ? { ...r, ...updatedResult } : r
+      ));
+      
       closeDetail();
-      loadResults();
+      // DON'T reload - we already updated local state!
     } catch (err) {
       console.error('Failed to update result:', err);
       alert('Failed to save changes');
@@ -220,8 +228,11 @@ export default function ResultsPage() {
     
     try {
       await api.delete(`/api/results/${id}`);
+      
+      // Remove from local state instead of reloading
+      setResults(prev => prev.filter(r => r.id !== id));
       closeDetail();
-      loadResults();
+      // DON'T reload - we already updated local state!
     } catch (err) {
       console.error('Failed to delete result:', err);
       alert('Failed to delete result');
@@ -433,6 +444,7 @@ export default function ResultsPage() {
               <option value="v13">V13</option>
               <option value="v14">V14</option>
               <option value="v15">V15</option>
+              <option value="v16">V16</option>
             </select>
           </div>
           <div>

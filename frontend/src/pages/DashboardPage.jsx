@@ -17,7 +17,7 @@ export default function DashboardPage({ setOverlayLoading }) {
   const prevPathname = useRef(location.pathname);
 
   // All possible versions from the generation website
-  const ALL_VERSIONS = ['v11', 'v12', 'v13', 'v14', 'v15'];
+  const ALL_VERSIONS = ['v11', 'v12', 'v13', 'v14', 'v15', 'v16'];
 
   useEffect(() => {
     const run = async () => {

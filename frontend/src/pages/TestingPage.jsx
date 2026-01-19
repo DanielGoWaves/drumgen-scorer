@@ -35,6 +35,8 @@ export default function TestingPage() {
   const [llmJson, setLlmJson] = useState(() => getInitialState('llmJson', null));
   const [llmResponse, setLlmResponse] = useState(() => getInitialState('llmResponse', null));
   const [audioUrl, setAudioUrl] = useState(() => getInitialState('audioUrl', ''));
+  const [audioId, setAudioId] = useState(() => getInitialState('audioId', ''));
+  const [audioFilePath, setAudioFilePath] = useState(() => getInitialState('audioFilePath', ''));
   const [illugenData, setIllugenData] = useState(() => getInitialState('illugenData', null));
   const [status, setStatus] = useState('');
   const [scores, setScores] = useState(() => getInitialState('scores', { audio_quality_score: null, llm_accuracy_score: null }));
@@ -194,7 +196,7 @@ export default function TestingPage() {
     }
   }, []);
 
-  // Auto-select v13 for cymbals, v14 for electric drums, v15 for acoustic drums (unless user manually changed it)
+  // Auto-select v16 for cymbals, v14 for electric drums, v15 for acoustic drums (unless user manually changed it)
   const [userModifiedVersion, setUserModifiedVersion] = useState(false);
   
   useEffect(() => {
@@ -203,7 +205,7 @@ export default function TestingPage() {
       const electricDrumTypes = ['clap', 'snap', 'scratch', 'impact']; // Electric drums typically use these
       
       if (cymbalTypes.includes(currentPrompt.drum_type.toLowerCase())) {
-        setModelVersion('v13');
+        setModelVersion('v16');
       } else if (electricDrumTypes.includes(currentPrompt.drum_type.toLowerCase())) {
         setModelVersion('v14');
       } else {
@@ -375,8 +377,10 @@ export default function TestingPage() {
       const { data } = await api.post('/api/test/send-prompt', payload);
       setLlmJson(data.llm_controls);
       setLlmResponse(data.llm_response || null);
-      // Construct full audio URL using API base (for network access)
+      // Store audio information
       setAudioUrl(data.audio_url ? `${API_BASE_URL}${data.audio_url}` : '');
+      setAudioId(data.audio_id || '');
+      setAudioFilePath(data.audio_url || '');  // audio_url is the relative path
       setNoteAttachments([]);
       setNoteAudioFile(null);
       setNoteAudioPath('');
@@ -663,6 +667,11 @@ export default function TestingPage() {
         llm_response: llmResponse,
         model_version: modelVersion,
         drum_type: llmKind || freeTextMetadata.drum_type || null,
+        // Include audio information
+        audio_id: audioId || null,
+        audio_file_path: audioFilePath || null,
+        notes: notes || null,
+        notes_audio_path: noteAudioPath || null,
       };
       
       if (freeTextMode) {
@@ -848,11 +857,12 @@ export default function TestingPage() {
               <option value="v13">V13 (Cymbals Only)</option>
               <option value="v14">V14 (Electronic)</option>
               <option value="v15">V15 (Acoustic)</option>
+              <option value="v16">V16 (Cymbals Only)</option>
             </select>
             {currentPrompt && currentPrompt.drum_type && !freeTextMode && 
              ['ride', 'crash', 'china', 'splash', 'hihat', 'closed hihat', 'open hihat'].includes(currentPrompt.drum_type.toLowerCase()) && (
               <span className="text-secondary" style={{ fontSize: '13px' }}>
-                ℹ️ Auto-selected V13 for cymbal
+                ℹ️ Auto-selected V16 for cymbal
               </span>
             )}
             {currentPrompt && currentPrompt.drum_type && !freeTextMode && 
@@ -944,11 +954,11 @@ export default function TestingPage() {
                     }}
                     placeholder={modelVersion === 'v14' 
                       ? "Describe the electric drum sound you want... (e.g., 'punchy 808 kick with reverb', 'crispy snare with vintage character'). Use v14 for electric drums."
-                      : modelVersion === 'v13'
-                      ? "Describe the cymbal sound you want... (Tip: Use V13 for cymbals)"
+                      : modelVersion === 'v13' || modelVersion === 'v16'
+                      ? "Describe the cymbal sound you want... (Tip: Use V16 for cymbals)"
                       : modelVersion === 'v15'
                       ? "Describe the acoustic drum sound you want... (e.g., 'warm maple kick', 'crispy snare with tight response'). V15 is for acoustic drums."
-                      : "Describe the drum sound you want... (Tip: Switch to V13 for cymbals, V14 for electric drums, V15 for acoustic drums)"}
+                      : "Describe the drum sound you want... (Tip: Switch to V16 for cymbals, V14 for electric drums, V15 for acoustic drums)"}
                     rows={2}
                     className={`input ${freeTextError ? 'flash-error-active' : ''}`}
                     style={{ 
