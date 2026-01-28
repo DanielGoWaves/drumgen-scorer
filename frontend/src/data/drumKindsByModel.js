@@ -3,9 +3,10 @@
  * v11 - Legacy general drums
  * v12 - Legacy general drums (deprecated, use v15)
  * v13 - Cymbals only (legacy)
- * v14 - Electronic drums
+ * v14 - Electronic drums (legacy)
  * v15 - Acoustic drums (kick, snare, tom, etc.)
  * v16 - Cymbals only (current)
+ * v17 - Electronic drums (current)
  */
 
 export const DRUM_KINDS_BY_MODEL = {
@@ -78,6 +79,14 @@ export const DRUM_KINDS_BY_MODEL = {
     'OpenHiHat',
     'China',
     'Splash'
+  ],
+  v17: [
+    'Clap',
+    'Snap',
+    'Scratch',
+    'Impact',
+    'Kick',
+    'Snare'
   ]
 };
 

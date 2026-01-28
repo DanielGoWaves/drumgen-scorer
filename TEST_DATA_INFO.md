@@ -9,7 +9,7 @@ A complete test dataset has been generated to test the dashboard functionality w
 - **100 test prompts** (tagged with `category='test-data'`)
 - **1000 test results** (tagged with `notes='[TEST DATA]'`)
 - **Date range**: Spread across last 30 days
-- **Model versions**: V11 (40%), V12 (30%), V13/V16 (30% + all cymbals use V16)
+- **Model versions**: V11 (40%), V12 (30%), V13/V16 (cymbals use V16), V14/V17 (electric drums use V17)
 - **Drum types**: All 15 types evenly distributed
 - **Difficulty**: 1-10, randomly distributed
 
@@ -29,7 +29,7 @@ Test data is clearly marked and separated:
 ## Test Data Characteristics
 
 - **Scores vary by difficulty**: Easier prompts tend to have higher scores
-- **Version performance**: V16 has slight bonus for cymbals, V11 baseline
+- **Version performance**: V16 has slight bonus for cymbals, V17 has slight bonus for electronic drums, V11 baseline
 - **Realistic distribution**: Mimics real testing patterns
 - **Complete metadata**: All fields populated (drum_type, model_version, generated_json, etc.)
 
@@ -39,7 +39,7 @@ With this test data, you can now:
 
 1. **View overall metrics** - See weighted score (0-100), generation quality, LLM accuracy
 2. **Filter by drum type** - Select specific drums to see isolated performance
-3. **Track version progress** - Compare V11, V12, V13, V14, V15, V16 performance
+3. **Track version progress** - Compare V11, V12, V13, V14, V15, V16, V17 performance
 4. **Analyze difficulty distribution** - Heat map shows score distribution across difficulty levels
 
 ## Clean Deletion
@@ -77,6 +77,7 @@ By Version:
 - V11: 190 tests
 - V12: 153 tests  
 - V13/V16: 657 tests (cymbals now use V16)
+- V14/V17: tests (electric drums now use V17)
 
 By Drum Type (example - kick):
 - Overall Score: 58.81/100

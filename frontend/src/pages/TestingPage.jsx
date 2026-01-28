@@ -196,7 +196,7 @@ export default function TestingPage() {
     }
   }, []);
 
-  // Auto-select v16 for cymbals, v14 for electric drums, v15 for acoustic drums (unless user manually changed it)
+  // Auto-select v16 for cymbals, v17 for electric drums, v15 for acoustic drums (unless user manually changed it)
   const [userModifiedVersion, setUserModifiedVersion] = useState(false);
   
   useEffect(() => {
@@ -207,7 +207,7 @@ export default function TestingPage() {
       if (cymbalTypes.includes(currentPrompt.drum_type.toLowerCase())) {
         setModelVersion('v16');
       } else if (electricDrumTypes.includes(currentPrompt.drum_type.toLowerCase())) {
-        setModelVersion('v14');
+        setModelVersion('v17');
       } else {
         setModelVersion('v15');
       }
@@ -858,6 +858,7 @@ export default function TestingPage() {
               <option value="v14">V14 (Electronic)</option>
               <option value="v15">V15 (Acoustic)</option>
               <option value="v16">V16 (Cymbals Only)</option>
+              <option value="v17">V17 (Electronic)</option>
             </select>
             {currentPrompt && currentPrompt.drum_type && !freeTextMode && 
              ['ride', 'crash', 'china', 'splash', 'hihat', 'closed hihat', 'open hihat'].includes(currentPrompt.drum_type.toLowerCase()) && (
@@ -868,7 +869,7 @@ export default function TestingPage() {
             {currentPrompt && currentPrompt.drum_type && !freeTextMode && 
              ['clap', 'snap', 'scratch', 'impact'].includes(currentPrompt.drum_type.toLowerCase()) && (
               <span className="text-secondary" style={{ fontSize: '13px' }}>
-                ℹ️ Auto-selected V14 for electric drum
+                ℹ️ Auto-selected V17 for electric drum
               </span>
             )}
           </div>
@@ -952,13 +953,13 @@ export default function TestingPage() {
                       setFreeText(e.target.value);
                       setFreeTextError(false);
                     }}
-                    placeholder={modelVersion === 'v14' 
-                      ? "Describe the electric drum sound you want... (e.g., 'punchy 808 kick with reverb', 'crispy snare with vintage character'). Use v14 for electric drums."
+                    placeholder={modelVersion === 'v14' || modelVersion === 'v17'
+                      ? "Describe the electric drum sound you want... (e.g., 'punchy 808 kick with reverb', 'crispy snare with vintage character'). Use V17 for electric drums."
                       : modelVersion === 'v13' || modelVersion === 'v16'
                       ? "Describe the cymbal sound you want... (Tip: Use V16 for cymbals)"
                       : modelVersion === 'v15'
                       ? "Describe the acoustic drum sound you want... (e.g., 'warm maple kick', 'crispy snare with tight response'). V15 is for acoustic drums."
-                      : "Describe the drum sound you want... (Tip: Switch to V16 for cymbals, V14 for electric drums, V15 for acoustic drums)"}
+                      : "Describe the drum sound you want... (Tip: Switch to V16 for cymbals, V17 for electric drums, V15 for acoustic drums)"}
                     rows={2}
                     className={`input ${freeTextError ? 'flash-error-active' : ''}`}
                     style={{ 

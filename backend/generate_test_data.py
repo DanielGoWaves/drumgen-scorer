@@ -22,7 +22,7 @@ DRUM_TYPES = [
 ]
 
 # Model versions
-MODEL_VERSIONS = ["v11", "v12", "v13", "v14", "v15", "v16"]
+MODEL_VERSIONS = ["v11", "v12", "v13", "v14", "v15", "v16", "v17"]
 
 # Test prompt templates (simple ones for testing only)
 TEST_PROMPTS = [
@@ -78,13 +78,13 @@ async def generate_test_data():
             prompt.used_count += 1
             
             # Determine model version
-            # Cymbals should use v16, electric drums use v14, acoustic drums use v15
+            # Cymbals should use v16, electric drums use v17, acoustic drums use v15
             cymbal_types = ['ride', 'crash', 'china', 'splash', 'hihat', 'closed hihat', 'open hihat']
             electric_types = ['clap', 'snap', 'scratch', 'impact']
             if prompt.drum_type in cymbal_types:
                 version = 'v16'
             elif prompt.drum_type in electric_types:
-                version = 'v14'
+                version = 'v17'
             else:
                 # Acoustic drums: 30% v11, 20% v12 (legacy), 50% v15 (current)
                 rand = random.random()
@@ -100,7 +100,7 @@ async def generate_test_data():
             difficulty_factor = (11 - prompt.difficulty) / 10.0  # 1.0 for easy, 0.1 for hard
             
             # Audio quality: varies but trends based on version
-            version_bonus = {'v11': 0, 'v12': 0.5, 'v13': 1.0, 'v14': 0.8, 'v15': 1.2, 'v16': 1.3}[version]
+            version_bonus = {'v11': 0, 'v12': 0.5, 'v13': 1.0, 'v14': 0.8, 'v15': 1.2, 'v16': 1.3, 'v17': 1.4}[version]
             audio_base = 5 + random.uniform(-2, 2) + (difficulty_factor * 1.5) + version_bonus
             audio_score = max(1, min(10, int(audio_base)))
             
@@ -150,7 +150,7 @@ async def generate_test_data():
         print(f"Total test prompts: 100")
         print(f"Total test results: 1000")
         print(f"Date range: Last 30 days")
-        print(f"Model versions: v11, v12, v13, v14, v15, v16")
+        print(f"Model versions: v11, v12, v13, v14, v15, v16, v17")
         print(f"Drum types: {len(DRUM_TYPES)} types")
         print(f"Difficulty range: 1-10")
         print("\nTo identify test data:")
