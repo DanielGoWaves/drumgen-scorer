@@ -8,9 +8,10 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import TestResult
+from ..models import ModelTestResult, TestResult
 
-AUDIO_DIR = Path("./audio_files")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+AUDIO_DIR = PROJECT_ROOT / "audio_files"
 logger = logging.getLogger(__name__)
 
 async def cleanup_orphaned_audio_file(audio_id: str, session: AsyncSession) -> bool:
@@ -63,11 +64,16 @@ async def cleanup_all_orphaned_audio(session: AsyncSession) -> int:
     if not AUDIO_DIR.exists():
         return 0
     
-    # Get all audio_ids that are linked to results
-    result = await session.execute(
+    # Get all audio_ids linked to classic LLM test results.
+    llm_result = await session.execute(
         select(TestResult.audio_id).where(TestResult.audio_id.isnot(None))
     )
-    linked_audio_ids = {row[0] for row in result.fetchall()}
+    linked_audio_ids = {row[0] for row in llm_result.fetchall()}
+    # Also keep model-testing generated audio files.
+    model_result = await session.execute(
+        select(ModelTestResult.generated_audio_id).where(ModelTestResult.generated_audio_id.isnot(None))
+    )
+    linked_audio_ids.update(row[0] for row in model_result.fetchall())
     
     # Get all audio files
     audio_files = list(AUDIO_DIR.glob("*.wav"))

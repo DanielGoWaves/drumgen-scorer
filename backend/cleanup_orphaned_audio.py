@@ -37,9 +37,12 @@ def cleanup_orphaned_audio(dry_run: bool = False) -> tuple[int, list[str]]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Get all audio_ids that are linked to results
+    # Get all audio_ids that are linked to classic LLM test results
     cursor.execute("SELECT DISTINCT audio_id FROM test_results WHERE audio_id IS NOT NULL")
     linked_audio_ids = {row[0] for row in cursor.fetchall()}
+    # Also protect Model Testing generated audio files
+    cursor.execute("SELECT DISTINCT generated_audio_id FROM model_test_results WHERE generated_audio_id IS NOT NULL")
+    linked_audio_ids.update(row[0] for row in cursor.fetchall())
     
     conn.close()
     
@@ -93,14 +96,17 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM test_results WHERE audio_id IS NOT NULL")
-    linked_count = cursor.fetchone()[0]
+    linked_test_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM model_test_results WHERE generated_audio_id IS NOT NULL")
+    linked_model_count = cursor.fetchone()[0]
     conn.close()
     
     audio_files_count = len(list(AUDIO_DIR.glob("*.wav"))) if AUDIO_DIR.exists() else 0
     
     print(f"📊 Statistics:")
     print(f"   Total audio files: {audio_files_count}")
-    print(f"   Audio files linked to results: {linked_count}")
+    print(f"   Audio files linked to LLM results: {linked_test_count}")
+    print(f"   Audio files linked to model-testing results: {linked_model_count}")
     print()
     
     # Run cleanup

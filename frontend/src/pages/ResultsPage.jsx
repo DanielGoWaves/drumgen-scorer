@@ -18,6 +18,7 @@ export default function ResultsPage() {
   
   // Filters (initialize from navigation state if provided)
   const [drumTypeFilter, setDrumTypeFilter] = useState(location.state?.drumType || 'all');
+  const [drumTypeKeyFilter, setDrumTypeKeyFilter] = useState(location.state?.drumTypeKey || null);
   const [difficultyFilter, setDifficultyFilter] = useState(location.state?.difficulty ? String(location.state.difficulty) : 'all');
   const [versionFilter, setVersionFilter] = useState(location.state?.modelVersion || 'all');
   const [audioScoreFilter, setAudioScoreFilter] = useState(location.state?.audioScore ? String(location.state.audioScore) : 'all');
@@ -59,6 +60,7 @@ export default function ResultsPage() {
     if (state) {
       // Update filters from navigation state - always update when state is present
       setDrumTypeFilter(state.drumType || 'all');
+      setDrumTypeKeyFilter(state.drumTypeKey || null);
       setDifficultyFilter(state.difficulty !== undefined && state.difficulty !== null ? String(state.difficulty) : 'all');
       setVersionFilter(state.modelVersion || 'all');
       setAudioScoreFilter(state.audioScore !== undefined && state.audioScore !== null ? String(state.audioScore) : 'all');
@@ -68,7 +70,7 @@ export default function ResultsPage() {
   // Load results when filters change
   useEffect(() => {
     loadResults();
-  }, [drumTypeFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
+  }, [drumTypeFilter, drumTypeKeyFilter, difficultyFilter, versionFilter, audioScoreFilter, hasNotesFilter]);
 
   const handleNoteFileSelect = (file) => {
     if (!file) return;
@@ -124,7 +126,11 @@ export default function ResultsPage() {
     setLoading(true);
     try {
       const params = {};
-      if (drumTypeFilter !== 'all') params.drum_type = drumTypeFilter;
+      if (drumTypeKeyFilter) {
+        params.drum_type_key = drumTypeKeyFilter;
+      } else if (drumTypeFilter !== 'all') {
+        params.drum_type = drumTypeFilter;
+      }
       if (difficultyFilter !== 'all') params.difficulty = parseInt(difficultyFilter);
       if (versionFilter !== 'all') params.model_version = versionFilter;
       if (audioScoreFilter !== 'all') params.audio_quality_score = parseInt(audioScoreFilter);
@@ -339,6 +345,7 @@ export default function ResultsPage() {
   // Reset all filters to default
   const resetFilters = () => {
     setDrumTypeFilter('all');
+    setDrumTypeKeyFilter(null);
     setDifficultyFilter('all');
     setVersionFilter('all');
     setAudioScoreFilter('all');
@@ -419,7 +426,14 @@ export default function ResultsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
           <div>
             <label className="label">Drum Type</label>
-            <select value={drumTypeFilter} onChange={(e) => setDrumTypeFilter(e.target.value)} className="input">
+            <select 
+              value={drumTypeFilter} 
+              onChange={(e) => {
+                setDrumTypeFilter(e.target.value);
+                setDrumTypeKeyFilter(null);
+              }} 
+              className="input"
+            >
               <option value="all">All</option>
               {availableDrumTypes.map(dt => (
                 <option key={dt} value={dt}>{dt}</option>

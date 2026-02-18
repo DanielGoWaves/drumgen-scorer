@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { API_BASE_URL } from '../services/api';
+import AudioPlayer from '../components/AudioPlayer';
 
 export default function LLMFailuresPage() {
   const [failures, setFailures] = useState([]);
@@ -51,22 +52,26 @@ export default function LLMFailuresPage() {
     setSelectedFailure(failure);
   };
   
-  const closeDetail = async () => {
-    if (selectedFailure && !selectedFailure.viewed) {
-      const shouldMarkAsViewed = window.confirm('Mark as viewed?');
-      if (shouldMarkAsViewed) {
-        try {
-          await api.put(`/api/llm-failures/${selectedFailure.id}`, { viewed: true });
-          // Update local state
-          setFailures(prev => prev.map(f => 
-            f.id === selectedFailure.id ? { ...f, viewed: true } : f
-          ));
-        } catch (err) {
-          console.error('Failed to mark as viewed:', err);
-        }
-      }
-    }
+  const closeDetail = () => {
     setSelectedFailure(null);
+  };
+  
+  const toggleViewed = async () => {
+    if (!selectedFailure) return;
+    
+    const newViewedStatus = !selectedFailure.viewed;
+    
+    try {
+      await api.put(`/api/llm-failures/${selectedFailure.id}`, { viewed: newViewedStatus });
+      // Update local state
+      setFailures(prev => prev.map(f => 
+        f.id === selectedFailure.id ? { ...f, viewed: newViewedStatus } : f
+      ));
+      setSelectedFailure({ ...selectedFailure, viewed: newViewedStatus });
+    } catch (err) {
+      console.error('Failed to update viewed status:', err);
+      alert('Failed to update viewed status');
+    }
   };
   
   const handleDelete = async () => {
@@ -355,6 +360,38 @@ export default function LLMFailuresPage() {
               ×
             </button>
             
+            {/* Toggle Viewed/Unviewed button */}
+            <button
+              onClick={toggleViewed}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '90px',
+                background: selectedFailure.viewed ? 'rgba(220, 53, 69, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                border: `1px solid ${selectedFailure.viewed ? 'rgba(220, 53, 69, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                color: selectedFailure.viewed ? '#dc3545' : '#22c55e',
+                padding: '6px 12px',
+                zIndex: 10,
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = selectedFailure.viewed ? 'rgba(220, 53, 69, 0.2)' : 'rgba(34, 197, 94, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = selectedFailure.viewed ? 'rgba(220, 53, 69, 0.1)' : 'rgba(34, 197, 94, 0.1)';
+              }}
+              title={selectedFailure.viewed ? 'Mark as unviewed' : 'Mark as viewed'}
+            >
+              {selectedFailure.viewed ? '👁️ Mark Unviewed' : '✓ Mark Viewed'}
+            </button>
+            
             {/* Delete button */}
             <button
               onClick={handleDelete}
@@ -450,6 +487,65 @@ export default function LLMFailuresPage() {
                   {selectedFailure.prompt_text}
                 </div>
               </div>
+              
+              {/* DrumGen Audio - The main generated audio */}
+              {selectedFailure.audio_id && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>DrumGen Audio:</div>
+                  <AudioPlayer src={`${API_BASE_URL}/api/audio/${selectedFailure.audio_id}`} />
+                </div>
+              )}
+              
+              {/* Notes Section - if exists */}
+              {selectedFailure.notes && selectedFailure.notes.trim() && (
+                <div style={{ marginBottom: '24px', padding: '16px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span 
+                      style={{
+                        display: 'inline-block',
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: '#ef4444'
+                      }}
+                    />
+                    Notes from Original Result:
+                  </div>
+                  <div style={{ fontSize: '15px', lineHeight: '1.6', color: 'var(--text-primary)', marginBottom: selectedFailure.notes_audio_path ? '12px' : '0' }}>
+                    {selectedFailure.notes}
+                  </div>
+                  {selectedFailure.notes_audio_path && (
+                    <div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>Attached audio:</div>
+                      <AudioPlayer src={`${API_BASE_URL}${selectedFailure.notes_audio_path}`} />
+                      <a
+                        href={`${API_BASE_URL}${selectedFailure.notes_audio_path}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--secondary-color)' }}
+                      >
+                        Download .wav
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Notes audio only - if no text notes */}
+              {!selectedFailure.notes && selectedFailure.notes_audio_path && (
+                <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--secondary-bg)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Audio Note from Original Result:</div>
+                  <AudioPlayer src={`${API_BASE_URL}${selectedFailure.notes_audio_path}`} />
+                  <a
+                    href={`${API_BASE_URL}${selectedFailure.notes_audio_path}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '12px', color: 'var(--secondary-color)' }}
+                  >
+                    Download .wav
+                  </a>
+                </div>
+              )}
               
               {/* LLM Response */}
               <div>

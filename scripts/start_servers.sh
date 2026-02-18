@@ -34,9 +34,18 @@ fi
 echo "🚀 Starting servers on main branch..."
 echo ""
 
+# Start Model Beta worker (V18 acoustic by default)
+MODEL_ROOT="${DRUMGEN_MODEL_ROOT:-"$HOME/Desktop/V18_Acoustic+Electronic"}"
+MODEL_PY="${MODEL_PYTHON_BIN:-python3}"
+MODEL_PID=""
+export MODEL_BETA_URL="http://127.0.0.1:8001"
+"$MODEL_PY" backend/model_beta_worker.py --model-root "$MODEL_ROOT" --onnx-dir "$MODEL_ROOT/onnx_exports/acoustic" --host 127.0.0.1 --port 8001 &
+MODEL_PID=$!
+echo "✓ Model Beta worker running on $MODEL_BETA_URL (PID: $MODEL_PID)"
+
 # Start backend in background
 cd backend
-uvicorn main:app --reload --port 8000 &
+uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 # Wait a moment for backend to start
@@ -55,7 +64,7 @@ echo ""
 echo "Press Ctrl+C to stop both servers"
 
 # Trap Ctrl+C and kill both processes
-trap "echo ''; echo 'Stopping servers...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" INT TERM
+trap "echo ''; echo 'Stopping servers...'; kill $BACKEND_PID $FRONTEND_PID $MODEL_PID 2>/dev/null; exit" INT TERM
 
 # Wait for processes
 wait

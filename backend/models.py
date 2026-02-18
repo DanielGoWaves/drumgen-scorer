@@ -59,6 +59,29 @@ class TestResult(Base):
     illugen_generation: Mapped[Optional["IllugenGeneration"]] = relationship("IllugenGeneration", back_populates="results")
 
 
+class ModelTestResult(Base):
+    __tablename__ = "model_test_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source_dataset: Mapped[str] = mapped_column(String, nullable=False)
+    source_filename: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    source_kind: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    source_audio_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    source_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    applied_tags: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    generated_audio_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    generated_audio_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
 class IllugenGeneration(Base):
     __tablename__ = "illugen_generations"
 
@@ -93,6 +116,11 @@ class LLMFailure(Base):
     free_text_drum_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     free_text_difficulty: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     free_text_category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Preserve notes, audio, and DrumGen audio from original result
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes_audio_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    audio_file_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # DrumGen audio
+    audio_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # DrumGen audio ID
 
     prompt: Mapped[Optional["Prompt"]] = relationship("Prompt")
 
@@ -163,6 +191,8 @@ class TestResultRead(BaseModel):
     illugen_attachments: Optional[dict[str, Any]]
     tested_at: datetime
     notes: Optional[str]
+    # Eagerly loaded prompt to avoid N+1 queries
+    prompt: Optional[PromptRead] = None
     
     @field_validator('generation_score', mode='before')
     @classmethod
@@ -198,6 +228,12 @@ class LLMFailureCreate(BaseModel):
     free_text_drum_type: Optional[str] = None
     free_text_difficulty: Optional[conint(ge=1, le=10)] = None
     free_text_category: Optional[str] = None
+    
+    # Audio fields
+    audio_id: Optional[str] = None
+    audio_file_path: Optional[str] = None
+    notes: Optional[str] = None
+    notes_audio_path: Optional[str] = None
 
 
 class LLMFailureRead(BaseModel):
@@ -215,6 +251,10 @@ class LLMFailureRead(BaseModel):
     free_text_drum_type: Optional[str]
     free_text_difficulty: Optional[int]
     free_text_category: Optional[str]
+    notes: Optional[str]
+    notes_audio_path: Optional[str]
+    audio_file_path: Optional[str]
+    audio_id: Optional[str]
 
 
 class LLMFailureUpdate(BaseModel):

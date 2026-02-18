@@ -541,8 +541,6 @@ body {
     border-color: var(--secondary-color) !important;
     border-width: 2px !important;
 }
-    }
-}
 
 /* Status Message Fade */
 .status-message-fade {
@@ -570,5 +568,31 @@ th[style*="cursor: pointer"]:hover {
 .custom-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+}
+
+/* Dark mode scrollbars (global) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #2b3240 #0f131a;
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #0f131a;
+    border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #2b3240;
+    border-radius: 8px;
+    border: 2px solid #0f131a;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: #3b4454;
 }
 

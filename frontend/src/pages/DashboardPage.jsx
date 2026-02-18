@@ -15,6 +15,10 @@ export default function DashboardPage({ setOverlayLoading }) {
   const [chartView, setChartView] = useState('bar'); // 'bar' or 'pie'
   const [hoveredPieSegment, setHoveredPieSegment] = useState(null);
   const prevPathname = useRef(location.pathname);
+  const drumChartScrollRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   // All possible versions from the generation website
   const ALL_VERSIONS = ['v11', 'v12', 'v13', 'v14', 'v15', 'v16', 'v17'];
@@ -446,7 +450,7 @@ export default function DashboardPage({ setOverlayLoading }) {
 
       {/* Difficulty Distribution Heat Map - Only show when we have data */}
       {!loading && hasData && (
-        <div className="card" style={{ zIndex: 1, overflow: 'visible' }}>
+        <div className="card" style={{ zIndex: 1, overflow: chartView === 'drum' ? 'hidden' : 'visible' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 className="label" style={{ fontSize: '18px', margin: 0, zIndex: 1 }}>
               Difficulty vs Score Distribution
@@ -490,6 +494,22 @@ export default function DashboardPage({ setOverlayLoading }) {
                 }}
               >
                 Pie Charts
+              </button>
+              <button
+                onClick={() => setChartView('drum')}
+                style={{
+                  padding: '6px 16px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: chartView === 'drum' ? '#3d2a5c' : 'transparent',
+                  color: chartView === 'drum' ? '#d0c5e8' : 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Drum Chart
               </button>
             </div>
           </div>
@@ -869,6 +889,258 @@ export default function DashboardPage({ setOverlayLoading }) {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {chartView === 'drum' && (
+          <div 
+            ref={drumChartScrollRef}
+            style={{ 
+              width: '100%',
+              maxWidth: '100%',
+              overflowX: 'auto', 
+              overflowY: 'hidden', 
+              zIndex: 1, 
+              position: 'relative',
+              cursor: isDragging ? 'grabbing' : 'grab',
+              userSelect: 'none'
+            }}
+            onMouseDown={(e) => {
+              setIsDragging(true);
+              setStartX(e.pageX - drumChartScrollRef.current.offsetLeft);
+              setScrollLeft(drumChartScrollRef.current.scrollLeft);
+            }}
+            onMouseLeave={() => setIsDragging(false)}
+            onMouseUp={() => setIsDragging(false)}
+            onMouseMove={(e) => {
+              if (!isDragging) return;
+              e.preventDefault();
+              const x = e.pageX - drumChartScrollRef.current.offsetLeft;
+              const walk = (x - startX) * 2; // Scroll speed multiplier
+              drumChartScrollRef.current.scrollLeft = scrollLeft - walk;
+            }}
+          >
+            <div style={{ 
+              width: 'max-content',
+              minWidth: analytics?.drum_type_distribution?.length > 0 ? `${analytics.drum_type_distribution.length * 96}px` : '820px', 
+              padding: '10px 10px 54px', 
+              overflow: 'visible', 
+              position: 'relative' 
+            }}>
+              {/* Chart container */}
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center', overflow: 'visible' }}>
+              {/* Y-axis label */}
+              <div style={{ 
+                writingMode: 'vertical-rl',
+                transform: 'rotate(180deg)',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: 'var(--text-secondary)',
+                paddingRight: '8px',
+                whiteSpace: 'nowrap',
+                alignSelf: 'center',
+                marginBottom: '40px'
+              }}>
+                Number of Tests
+              </div>
+
+              {/* Bars */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: `repeat(${analytics?.drum_type_distribution?.length || 1}, minmax(80px, 1fr))`, 
+                gap: '16px', 
+                width: '100%',
+                paddingBottom: '12px',
+                alignItems: 'end',
+                overflow: 'visible'
+              }}>
+                {(analytics?.drum_type_distribution || [])
+                  .sort((a, b) => a.generation_score - b.generation_score)
+                  .map((drumData, idx, sortedArray) => {
+                  const drumTypeKey = drumData.drum_type_key || drumData.drum_type;
+                  const isRightSide = idx >= sortedArray.length - 3; // last 3 bars
+                  const maxTests = Math.max(...sortedArray.map(d => d.total_tests), 1);
+                  const barHeightPx = drumData.total_tests > 0 ? Math.max((drumData.total_tests / maxTests) * 260, 18) : 10;
+
+                  // Build segment heights in pixels with a minimum size and rescale to fit
+                  const segments = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+                    .map((score) => ({
+                      score,
+                      count: drumData.score_distribution[score] || 0,
+                    }))
+                    .filter((s) => s.count > 0);
+
+                  let segmentHeights = segments.map((s) => Math.max((s.count / drumData.total_tests) * barHeightPx, 8));
+                  const totalHeight = segmentHeights.reduce((a, b) => a + b, 0);
+                  if (totalHeight > barHeightPx) {
+                    const scale = barHeightPx / totalHeight;
+                    segmentHeights = segmentHeights.map((h) => h * scale);
+                  }
+
+                  return (
+                    <div 
+                      key={drumTypeKey}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}
+                    >
+                      {/* Generation Score - PROMINENT */}
+                      <div style={{ 
+                        fontSize: '18px', 
+                        fontWeight: '700', 
+                        minHeight: '22px',
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        gap: '2px'
+                      }}>
+                        {drumData.total_tests > 0 && (
+                          <>
+                            <span style={{ color: getScore100Color(drumData.generation_score) }}>
+                              {drumData.generation_score}
+                            </span>
+                            <span style={{ color: score10Green, fontSize: '12px', fontWeight: '500' }}>/100</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Count above bar */}
+                      <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', minHeight: '16px' }}>
+                        {drumData.total_tests > 0 ? drumData.total_tests : ''}
+                      </div>
+
+                      {/* Bar */}
+                      <div style={{
+                        width: '100%',
+                        height: `${barHeightPx}px`,
+                        background: drumData.total_tests === 0 ? 'var(--border-color)' : 'transparent',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        overflow: 'visible',
+                        display: 'flex',
+                        flexDirection: 'column-reverse',
+                        position: 'relative'
+                      }}>
+                        {drumData.total_tests > 0 && segments.map((segment, idx) => {
+                          const isHovered = hoveredSegment?.drum_type === drumData.drum_type && hoveredSegment?.score === segment.score;
+                            return (
+                            <div
+                              key={segment.score}
+                              style={{
+                                height: `${segmentHeights[idx]}px`,
+                                background: getScoreColor(segment.score),
+                                borderTop: '1px solid rgba(0,0,0,0.15)',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                opacity: 1,
+                                transition: 'opacity 0.2s, transform 0.2s, box-shadow 0.2s',
+                                transform: isHovered ? 'translateY(-2px) scale(1.02)' : 'none',
+                                boxShadow: isHovered ? '0 6px 14px rgba(0,0,0,0.25)' : 'none',
+                                zIndex: isHovered ? 3000 : 1
+                              }}
+                              onMouseEnter={() => setHoveredSegment({ drum_type: drumData.drum_type, score: segment.score, count: segment.count })}
+                              onMouseLeave={() => setHoveredSegment(null)}
+                              onClick={() => {
+                                navigate('/results', {
+                                  state: {
+                                    drumType: drumData.drum_type,
+                                    drumTypeKey,
+                                    audioScore: segment.score,
+                                    modelVersion: selectedVersion !== 'all' ? selectedVersion : 'all'
+                                  }
+                                });
+                              }}
+                            >
+                              {isHovered && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  left: isRightSide ? 'auto' : '110%',
+                                  right: isRightSide ? '110%' : 'auto',
+                                  transform: 'translateY(-50%)',
+                                  background: 'var(--primary-bg)',
+                                  border: '1px solid var(--border-color)',
+                                  borderRadius: '6px',
+                                  padding: '12px 14px',
+                                  fontSize: '12px',
+                                  whiteSpace: 'nowrap',
+                                  boxShadow: '0 6px 16px rgba(0,0,0,0.4)',
+                                  zIndex: 4000,
+                                  marginBottom: '6px',
+                                  minWidth: '140px'
+                                }}>
+                                  <div style={{ 
+                                    fontSize: '20px', 
+                                    fontWeight: '700', 
+                                    color: 'var(--primary-color)',
+                                    marginBottom: '8px',
+                                    lineHeight: '1.2'
+                                  }}>
+                                    {segment.count} test{segment.count !== 1 ? 's' : ''}
+                                  </div>
+                                  <div style={{ 
+                                    fontSize: '11px', 
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: '6px',
+                                    borderBottom: '1px solid var(--border-color)',
+                                    paddingBottom: '6px'
+                                  }}>
+                                    <span>{drumData.drum_type}, Score </span>
+                                    <span style={{ fontSize: '11px', fontWeight: '700', color: getScoreColor(segment.score) }}>{segment.score}</span>
+                                  </div>
+                                  <span style={{ fontSize: '10px', opacity: 0.7, fontStyle: 'italic', color: 'var(--text-secondary)' }}>Click to view results →</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Drum Type label - clickable */}
+                      <div 
+                        style={{ 
+                          fontSize: '13px', 
+                          fontWeight: '700', 
+                          color: 'var(--primary-color)',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          minHeight: '32px',
+                          maxWidth: '80px',
+                          wordWrap: 'break-word',
+                          lineHeight: '1.2',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'center',
+                          transition: 'color 0.2s'
+                        }}
+                        onClick={() => {
+                          navigate('/results', {
+                            state: {
+                              drumType: drumData.drum_type,
+                              drumTypeKey,
+                              modelVersion: selectedVersion !== 'all' ? selectedVersion : 'all'
+                            }
+                          });
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--warning-color)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--primary-color)'}
+                      >
+                        {drumData.drum_type}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              </div>
+
+              {/* X-axis label */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                marginTop: '6px'
+              }}>
+                <div className="text-secondary" style={{ fontSize: '13px', fontWeight: '600' }}>
+                  Drum Type (click to filter)
                 </div>
               </div>
             </div>

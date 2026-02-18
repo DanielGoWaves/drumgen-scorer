@@ -3,6 +3,7 @@ from __future__ import annotations
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import math
@@ -13,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..database import get_session
 from ..models import (
@@ -33,6 +35,16 @@ router = APIRouter()
 
 NOTE_AUDIO_DIR = Path("./note_attachments")
 NOTE_AUDIO_DIR.mkdir(exist_ok=True)
+
+
+def normalize_drum_type(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    normalized = normalized.replace('"', '').replace("'", '').replace("`", '')
+    normalized = re.sub(r'[\s\-_]+', '', normalized)
+    normalized = re.sub(r'[^a-z0-9]', '', normalized)
+    return normalized or None
 
 
 @router.post("/score", response_model=TestResultRead, status_code=status.HTTP_201_CREATED, summary="Submit a score")
@@ -89,6 +101,8 @@ async def submit_score(
     session.add(result)
     await session.commit()
     await session.refresh(result)
+    # Eagerly load the prompt relationship for the response
+    await session.refresh(result, attribute_names=['prompt'])
     return TestResultRead.model_validate(result)
 
 
@@ -217,13 +231,64 @@ async def dashboard(
         difficulty_dist[diff]["total_tests"] += 1
         difficulty_dist[diff]["score_distribution"][audio_score] += 1
     
+    # Drum type distribution with score heat map (normalized for minor variations)
+    drum_type_dist = {}
+    for test, prompt in tests:
+        raw_drum_type = prompt.drum_type
+        drum_key = normalize_drum_type(raw_drum_type)
+        if not drum_key:
+            continue  # Skip tests without drum type
+
+        if drum_key not in drum_type_dist:
+            drum_type_dist[drum_key] = {
+                "drum_type_key": drum_key,
+                "variants": {},
+                "total_tests": 0,
+                "score_distribution": {i: 0 for i in range(1, 11)},
+                "generation_scores": []
+            }
+
+        if raw_drum_type:
+            drum_type_dist[drum_key]["variants"][raw_drum_type] = (
+                drum_type_dist[drum_key]["variants"].get(raw_drum_type, 0) + 1
+            )
+
+        audio_score = max(1, min(10, int(round(test.audio_quality_score))))
+        drum_type_dist[drum_key]["total_tests"] += 1
+        drum_type_dist[drum_key]["score_distribution"][audio_score] += 1
+
+        # Collect generation scores for average calculation
+        if test.generation_score is not None:
+            drum_type_dist[drum_key]["generation_scores"].append(test.generation_score)
+        elif test.audio_quality_score is not None:
+            gen_score = calculate_generation_score(prompt.difficulty, test.audio_quality_score)
+            drum_type_dist[drum_key]["generation_scores"].append(gen_score)
+
+    # Calculate average generation score for each drum type and clean up
+    drum_type_data = []
+    for drum_key, data in drum_type_dist.items():
+        avg_gen_score = sum(data["generation_scores"]) / len(data["generation_scores"]) if data["generation_scores"] else 0
+        variants = data["variants"]
+        display_name = max(variants, key=variants.get) if variants else drum_key
+        drum_type_data.append({
+            "drum_type": display_name,
+            "drum_type_key": drum_key,
+            "total_tests": data["total_tests"],
+            "generation_score": math.ceil(avg_gen_score),
+            "score_distribution": data["score_distribution"]
+        })
+
+    # Sort alphabetically by display name
+    drum_type_data.sort(key=lambda x: x["drum_type"])
+    
     return {
         "overall_generation_score": math.ceil(overall_generation_score),
         "avg_audio_quality": math.ceil((sum(audio_scores) / len(audio_scores)) * 10) / 10 if audio_scores else 0,
         "avg_llm_accuracy": math.ceil((sum(llm_scores) / len(llm_scores)) * 10) / 10 if llm_scores else 0,
         "total_tests": len(tests),
         "by_version": sorted(version_data, key=lambda x: x["version"]),
-        "difficulty_distribution": list(difficulty_dist.values())
+        "difficulty_distribution": list(difficulty_dist.values()),
+        "drum_type_distribution": drum_type_data
     }
 
 
@@ -231,6 +296,7 @@ async def dashboard(
 @router.get("/", response_model=List[TestResultRead], summary="List all test results")
 async def list_results(
     drum_type: Optional[str] = None,
+    drum_type_key: Optional[str] = None,
     difficulty: Optional[int] = None,
     model_version: Optional[str] = None,
     audio_quality_score: Optional[int] = None,
@@ -242,10 +308,36 @@ async def list_results(
     """Get paginated list of test results with optional filtering."""
     # Use left join to ensure all results are returned even if prompt is missing
     # But since we always create prompts (even for free text), inner join should work
-    query = select(TestResult).join(Prompt, TestResult.prompt_id == Prompt.id)
+    # Eagerly load prompts to avoid N+1 queries on the frontend
+    query = (
+        select(TestResult)
+        .join(Prompt, TestResult.prompt_id == Prompt.id)
+        .options(selectinload(TestResult.prompt))
+    )
     
     # Apply filters - only add where clause if value is provided and not empty
-    if drum_type and drum_type.strip():
+    if drum_type_key and drum_type_key.strip():
+        normalized_input = normalize_drum_type(drum_type_key)
+        if normalized_input:
+            normalized_column = func.replace(
+                func.replace(
+                    func.replace(
+                        func.replace(
+                            func.replace(func.lower(Prompt.drum_type), " ", ""),
+                            "-",
+                            "",
+                        ),
+                        "_",
+                        "",
+                    ),
+                    '"',
+                    "",
+                ),
+                "'",
+                "",
+            )
+            query = query.where(normalized_column == normalized_input)
+    elif drum_type and drum_type.strip():
         query = query.where(Prompt.drum_type == drum_type)
     if difficulty is not None:
         query = query.where(Prompt.difficulty == difficulty)
@@ -570,6 +662,8 @@ async def get_result(
     result = await session.get(TestResult, result_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Result not found")
+    # Eagerly load the prompt relationship for the response
+    await session.refresh(result, attribute_names=['prompt'])
     return TestResultRead.model_validate(result)
 
 
@@ -600,6 +694,8 @@ async def update_result(
     
     await session.commit()
     await session.refresh(result)
+    # Eagerly load the prompt relationship for the response
+    await session.refresh(result, attribute_names=['prompt'])
     return TestResultRead.model_validate(result)
 
 
@@ -675,9 +771,9 @@ async def set_result_as_llm_failure(
     """
     Convert a test result to an LLM failure.
     This will:
-    1. Create an LLM failure record from the result
+    1. Create an LLM failure record from the result (preserving notes and audio)
     2. Delete the result (removing it from averages)
-    3. Delete the attached audio file
+    3. Keep the audio file and notes for reference
     """
     result = await session.get(TestResult, result_id)
     if not result:
@@ -719,7 +815,7 @@ async def set_result_as_llm_failure(
         else:
             llm_response_text = 'No LLM response available'
     
-    # Create LLM failure record (saved to database)
+    # Create LLM failure record (saved to database) - PRESERVE notes and audio
     llm_failure = LLMFailure(
         prompt_id=result.prompt_id,
         prompt_text=prompt.text,
@@ -727,10 +823,14 @@ async def set_result_as_llm_failure(
         model_version=result.model_version,
         drum_type=drum_type,
         viewed=False,
+        notes=result.notes,  # ← Preserve notes
+        notes_audio_path=result.notes_audio_path,  # ← Preserve notes audio
+        audio_file_path=result.audio_file_path,  # ← Preserve DrumGen audio path
+        audio_id=result.audio_id,  # ← Preserve DrumGen audio ID
     )
     session.add(llm_failure)
     
-    # Store audio_id before deletion
+    # Store audio_id before deletion (for logging only - we DON'T delete it)
     audio_id = result.audio_id
     
     # Delete the result (this removes it from all averages)
@@ -739,12 +839,11 @@ async def set_result_as_llm_failure(
     # Commit both operations atomically
     await session.commit()
     
-    # Clean up audio file if it exists (after commit to ensure result is deleted)
-    if audio_id:
-        removed = await cleanup_orphaned_audio_file(audio_id, session)
-        logger.info(
-            "Post-conversion audio cleanup for audio_id=%s removed=%s", audio_id, removed
-        )
+    # DO NOT clean up audio files - they are preserved for reference
+    logger.info(
+        "Converted result id=%s to LLM failure id=%s, preserved audio_id=%s notes=%s notes_audio=%s",
+        result_id, llm_failure.id, audio_id, bool(result.notes), bool(result.notes_audio_path)
+    )
     
     logger.info("Converted result id=%s to LLM failure id=%s", result_id, llm_failure.id)
     return {"llm_failure_id": llm_failure.id, "message": "Result converted to LLM failure"}

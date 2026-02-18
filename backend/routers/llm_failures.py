@@ -47,6 +47,11 @@ async def submit_llm_failure(
         free_text_difficulty=payload.free_text_difficulty,
         free_text_category=payload.free_text_category,
         viewed=False,
+        # Preserve audio from testing page submission
+        audio_id=payload.audio_id,
+        audio_file_path=payload.audio_file_path,
+        notes=payload.notes,
+        notes_audio_path=payload.notes_audio_path,
     )
     session.add(failure)
     await session.commit()

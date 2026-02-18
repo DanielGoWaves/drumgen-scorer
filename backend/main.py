@@ -14,8 +14,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy import text
 
 from backend.database import Base, engine, async_session_maker
-from backend.routers import prompts, results, testing, llm_failures
+from backend.routers import prompts, results, testing, llm_failures, model_beta, model_testing
 from backend.services.audio_cleanup import cleanup_all_orphaned_audio
+from backend.services.model_worker_manager import ensure_model_worker_started, stop_model_worker
 from backend.backup_service import start_backup_scheduler, stop_backup_scheduler
 
 
@@ -124,6 +125,7 @@ async def init_models() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     await init_models()
+    ensure_model_worker_started()
     
     # Start backup service every 12 hours (43200 seconds)
     start_backup_scheduler(interval_seconds=43200)
@@ -135,18 +137,29 @@ async def on_startup() -> None:
             print(f"🧹 Cleaned up {deleted_count} orphaned audio file(s) on startup")
 
 
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    stop_backup_scheduler()
+    stop_model_worker()
+
+
 # Routers
 app.include_router(prompts.router, prefix="/api/prompts", tags=["prompts"])
 app.include_router(testing.router, prefix="/api/test", tags=["testing"])
 app.include_router(results.router, prefix="/api/results", tags=["results"])
 app.include_router(llm_failures.router, prefix="/api/llm-failures", tags=["llm-failures"])
+app.include_router(model_beta.router, prefix="/api/model-beta", tags=["model-beta"])
+app.include_router(model_testing.router, prefix="/api/model-testing", tags=["model-testing"])
 
 
 # Audio file serving endpoint
 @app.get("/api/audio/{audio_id}")
 async def serve_audio(audio_id: str):
     """Serve locally stored audio files."""
-    audio_path = Path(f"./audio_files/{audio_id}.wav")
+    project_root = Path(__file__).resolve().parent.parent
+    canonical_audio_path = project_root / "audio_files" / f"{audio_id}.wav"
+    legacy_audio_path = project_root / "backend" / "audio_files" / f"{audio_id}.wav"
+    audio_path = canonical_audio_path if canonical_audio_path.exists() else legacy_audio_path
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(audio_path, media_type="audio/wav")

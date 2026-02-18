@@ -20,10 +20,11 @@ from ..services.illugen_client import IllugenClient
 router = APIRouter()
 
 # Audio files directory
-AUDIO_DIR = Path("./audio_files")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+AUDIO_DIR = PROJECT_ROOT / "audio_files"
 AUDIO_DIR.mkdir(exist_ok=True)
 
-ILLUGEN_AUDIO_DIR = Path("./illugen_audio")
+ILLUGEN_AUDIO_DIR = PROJECT_ROOT / "illugen_audio"
 ILLUGEN_AUDIO_DIR.mkdir(exist_ok=True)
 
 

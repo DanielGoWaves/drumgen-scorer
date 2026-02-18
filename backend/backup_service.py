@@ -19,8 +19,8 @@ AUDIO_DIR = PROJECT_ROOT / "audio_files"
 ILLUGEN_AUDIO_DIR = PROJECT_ROOT / "illugen_audio"
 BACKUP_ROOT = Path("/Users/qa_m2/Documents/Cursor AI/DrumGen Scorer DB backups")
 
-# Keep only 2 backups (most recent two)
-MAX_BACKUPS = 2
+# Keep 14 backups (~7 days at 12-hour interval)
+MAX_BACKUPS = 14
 
 
 def create_backup():

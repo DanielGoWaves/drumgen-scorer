@@ -1,6 +1,9 @@
 import React from 'react';
 
 export default function AudioPlayer({ src }) {
+  // Debug logging
+  console.log('AudioPlayer received src:', src);
+  
   if (!src) {
     return (
       <div style={{ 
@@ -33,9 +36,20 @@ export default function AudioPlayer({ src }) {
           borderRadius: '4px',
           outline: 'none'
         }}
+        onError={(e) => {
+          console.error('Audio failed to load:', src);
+          console.error('Error details:', e.target.error);
+        }}
+        onLoadedData={() => {
+          console.log('Audio loaded successfully:', src);
+        }}
       >
         Your browser does not support the audio element.
       </audio>
+      {/* Debug info */}
+      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '8px', wordBreak: 'break-all' }}>
+        {src}
+      </div>
     </div>
   );
 }
